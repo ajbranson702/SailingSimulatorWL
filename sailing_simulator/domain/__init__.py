@@ -16,7 +16,7 @@ from sailing_simulator.domain.models import (
     WindModel,
     WindMode,
 )
-from sailing_simulator.domain.presets import course_for_format, required_mark_types_for
+from sailing_simulator.domain.presets import add_gybe_mark, adapt_course_to_format, course_for_format, required_mark_types_for
 from sailing_simulator.domain.serialization import load_scenario, save_scenario
 from sailing_simulator.domain.validation import validate_course
 
@@ -37,6 +37,8 @@ __all__ = [
     "WindField",
     "WindModel",
     "WindMode",
+    "adapt_course_to_format",
+    "add_gybe_mark",
     "course_for_format",
     "load_scenario",
     "required_mark_types_for",

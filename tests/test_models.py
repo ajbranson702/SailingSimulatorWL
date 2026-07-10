@@ -1,5 +1,5 @@
 from sailing_simulator.domain.models import MarkType, RaceFormat, default_scenario
-from sailing_simulator.domain.presets import course_for_format
+from sailing_simulator.domain.presets import adapt_course_to_format, course_for_format
 from sailing_simulator.domain.serialization import scenario_from_dict, scenario_to_dict
 from sailing_simulator.domain.validation import validate_course
 
@@ -47,3 +47,25 @@ def test_scenario_serialization_round_trip_preserves_course():
         MarkType.GYBE,
         MarkType.FINISH,
     ]
+
+
+def test_adapting_w_course_to_t3_adds_gybe_and_uses_leeward_as_finish():
+    course = course_for_format(RaceFormat.W2)
+
+    adapt_course_to_format(course, RaceFormat.T3)
+
+    assert course.race_format == RaceFormat.T3
+    assert {mark.mark_type for mark in course.marks} == {
+        MarkType.WINDWARD,
+        MarkType.GYBE,
+        MarkType.FINISH,
+    }
+
+
+def test_adapting_t3_back_to_w_course_uses_finish_as_leeward():
+    course = course_for_format(RaceFormat.T3)
+
+    adapt_course_to_format(course, RaceFormat.W4)
+
+    assert course.race_format == RaceFormat.W4
+    assert MarkType.LEEWARD in {mark.mark_type for mark in course.marks}

@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from sailing_simulator.domain.models import Boat, BoatControlMode, RaceFormat, Vector2, WindMode, default_scenario
-from sailing_simulator.domain.presets import course_for_format
+from sailing_simulator.domain.presets import adapt_course_to_format, add_gybe_mark, course_for_format
 from sailing_simulator.domain.serialization import load_scenario, save_scenario
 from sailing_simulator.domain.validation import validate_course
 from sailing_simulator.ui.course_canvas import CourseCanvas
@@ -68,6 +68,7 @@ class MainWindow(QMainWindow):
         for race_format in RaceFormat:
             self.format_combo.addItem(race_format.value, race_format.value)
         self.format_combo.setCurrentText(self.scenario.course.race_format.value)
+        self.format_combo.currentIndexChanged.connect(self._on_course_format_changed)
         form.addRow("Race format", self.format_combo)
 
         self.boat_count = QSpinBox()
@@ -107,6 +108,12 @@ class MainWindow(QMainWindow):
         course_actions.addWidget(apply_preset)
         course_actions.addWidget(validate)
         layout.addLayout(course_actions)
+
+        mark_actions = QHBoxLayout()
+        self.add_gybe_mark_button = QPushButton("Add Gybe Mark")
+        self.add_gybe_mark_button.clicked.connect(self._add_gybe_mark)
+        mark_actions.addWidget(self.add_gybe_mark_button)
+        layout.addLayout(mark_actions)
 
         file_actions = QHBoxLayout()
         save = QPushButton("Save")
@@ -156,6 +163,23 @@ class MainWindow(QMainWindow):
         self._refresh_controls_from_scenario()
         self.statusBar().showMessage(f"Applied {race_format.value} course preset")
 
+    def _on_course_format_changed(self) -> None:
+        race_format = self._selected_race_format()
+        adapt_course_to_format(self.scenario.course, race_format)
+        self.canvas.update()
+        self._refresh_course_controls()
+        self._refresh_boat_status()
+        self.statusBar().showMessage(f"Course format set to {race_format.value}")
+
+    def _add_gybe_mark(self) -> None:
+        adapt_course_to_format(self.scenario.course, RaceFormat.T3)
+        add_gybe_mark(self.scenario.course)
+        self.format_combo.setCurrentText(RaceFormat.T3.value)
+        self.canvas.update()
+        self._refresh_course_controls()
+        self._refresh_boat_status()
+        self.statusBar().showMessage("Gybe mark added for T course")
+
     def _validate_course(self) -> None:
         self._update_scenario_from_controls()
         errors = validate_course(self.scenario.course)
@@ -200,14 +224,20 @@ class MainWindow(QMainWindow):
         self.scenario.wind_model.gust_percent = self.gust_percent.value()
 
     def _refresh_controls_from_scenario(self) -> None:
+        self.format_combo.blockSignals(True)
         self.format_combo.setCurrentText(self.scenario.course.race_format.value)
+        self.format_combo.blockSignals(False)
         self.boat_count.blockSignals(True)
         self.boat_count.setValue(len(self.scenario.boats))
         self.boat_count.blockSignals(False)
         self.wind_mode.setCurrentIndex(self.wind_mode.findData(self.scenario.wind_model.mode.value))
         self.wind_strength.setValue(self.scenario.wind_model.base_speed_knots)
         self.gust_percent.setValue(self.scenario.wind_model.gust_percent)
+        self._refresh_course_controls()
         self._refresh_boat_status()
+
+    def _refresh_course_controls(self) -> None:
+        self.add_gybe_mark_button.setEnabled(self.scenario.course.race_format == RaceFormat.T3)
 
     def _refresh_boat_status(self) -> None:
         user_boat = next(
