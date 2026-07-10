@@ -288,6 +288,8 @@ Deliverable: user can lay out a windward-leeward course and reload it.
 
 Deliverable: user can sail a boat around the course under static wind.
 
+Status: initial implementation complete.
+
 ### Phase 4: Race State and Course Progress
 
 - Add race start, pause, reset, and simulation speed controls.

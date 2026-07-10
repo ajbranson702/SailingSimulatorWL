@@ -117,6 +117,7 @@ def boat_to_dict(boat: Boat) -> dict[str, Any]:
         "speed_knots": boat.speed_knots,
         "control_mode": boat.control_mode.value,
         "target_leg_index": boat.target_leg_index,
+        "track": [vector_to_dict(point) for point in boat.track],
     }
 
 
@@ -128,6 +129,7 @@ def boat_from_dict(data: dict[str, Any]) -> Boat:
         speed_knots=float(data.get("speed_knots", 0.0)),
         control_mode=BoatControlMode(data.get("control_mode", BoatControlMode.AI.value)),
         target_leg_index=int(data.get("target_leg_index", 0)),
+        track=[vector_from_dict(point, Vector2(0.0, 0.0)) for point in data.get("track", [])],
     )
 
 

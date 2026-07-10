@@ -4,7 +4,7 @@ Windows desktop simulator for experimenting with windward-leeward sailing race s
 
 ## Current Status
 
-Phase 2 is underway:
+Phase 3 is underway:
 
 - PySide6 app shell
 - Single simulator screen
@@ -13,7 +13,18 @@ Phase 2 is underway:
 - Initial domain data model
 - Course presets for W2, T3, W4, and W6
 - Scenario save/load JSON support
+- User boat movement under static wind
+- Default polar lookup with no-go-zone slowdown
+- Keyboard steering and tack controls
+- Boat track rendering
 - Basic domain tests
+
+## Controls
+
+- Up arrow: head up toward the wind
+- Down arrow: bear away from the wind
+- `T`: tack
+- Start/Pause/Reset: control simulation playback
 
 ## Environment
 

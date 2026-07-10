@@ -18,6 +18,7 @@ class DragTarget:
 
 class CourseCanvas(QWidget):
     scenario_changed = Signal()
+    key_pressed = Signal(int)
 
     def __init__(self, scenario: Scenario, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -42,6 +43,7 @@ class CourseCanvas(QWidget):
         self._draw_course_boundary(painter, rect)
         self._draw_wind_grid(painter, rect)
         self._draw_course_objects(painter, rect)
+        self._draw_tracks(painter, rect)
         self._draw_boats(painter, rect)
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
@@ -71,6 +73,11 @@ class CourseCanvas(QWidget):
             self._drag_target = None
             self.unsetCursor()
             self.scenario_changed.emit()
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if event.isAutoRepeat():
+            return
+        self.key_pressed.emit(event.key())
 
     def _draw_course_boundary(self, painter: QPainter, rect: QRectF) -> None:
         painter.setPen(QPen(QColor("#4b6b75"), 2))
@@ -115,6 +122,17 @@ class CourseCanvas(QWidget):
             center = self._to_screen(mark.position, rect)
             painter.drawEllipse(center, 12, 12)
             painter.drawText(center + QPointF(14, 5), mark.label)
+
+    def _draw_tracks(self, painter: QPainter, rect: QRectF) -> None:
+        for boat in self.scenario.boats:
+            if len(boat.track) < 2:
+                continue
+
+            color = QColor("#d64747") if boat.control_mode == BoatControlMode.USER else QColor("#2f6fe4")
+            color.setAlpha(125)
+            painter.setPen(QPen(color, 2))
+            for first, second in zip(boat.track, boat.track[1:]):
+                painter.drawLine(self._to_screen(first, rect), self._to_screen(second, rect))
 
     def _draw_boats(self, painter: QPainter, rect: QRectF) -> None:
         for boat in self.scenario.boats:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -26,6 +26,14 @@ from sailing_simulator.domain.presets import (
     remove_invalid_marks,
 )
 from sailing_simulator.domain.serialization import load_scenario, save_scenario
+from sailing_simulator.domain.simulation import (
+    reset_boats_to_start,
+    steer_away_from_wind,
+    steer_toward_wind,
+    step_scenario,
+    tack,
+    true_wind_angle,
+)
 from sailing_simulator.domain.validation import validate_course
 from sailing_simulator.ui.course_canvas import CourseCanvas
 
@@ -34,12 +42,16 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.scenario = default_scenario()
+        self._timer = QTimer(self)
+        self._timer.setInterval(100)
+        self._timer.timeout.connect(self._step_simulation)
 
         self.setWindowTitle("Sailing Race Simulator")
         self.resize(1180, 820)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setCentralWidget(self._build_content())
         self._refresh_controls_from_scenario()
-        self.statusBar().showMessage("Phase 2 course editor ready")
+        self.statusBar().showMessage("Phase 3 sailing controls ready")
 
     def _build_content(self) -> QWidget:
         root = QWidget()
@@ -49,6 +61,7 @@ class MainWindow(QMainWindow):
 
         self.canvas = CourseCanvas(self.scenario)
         self.canvas.scenario_changed.connect(self._on_canvas_changed)
+        self.canvas.key_pressed.connect(self._handle_key)
         layout.addWidget(self.canvas, 1)
         layout.addWidget(self._build_control_panel())
 
@@ -136,9 +149,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._section_label("Playback"))
 
         playback = QHBoxLayout()
-        playback.addWidget(QPushButton("Start"))
-        playback.addWidget(QPushButton("Pause"))
-        playback.addWidget(QPushButton("Reset"))
+        self.start_button = QPushButton("Start")
+        self.start_button.clicked.connect(self._start_simulation)
+        self.pause_button = QPushButton("Pause")
+        self.pause_button.clicked.connect(self._pause_simulation)
+        self.reset_button = QPushButton("Reset")
+        self.reset_button.clicked.connect(self._reset_simulation)
+        playback.addWidget(self.start_button)
+        playback.addWidget(self.pause_button)
+        playback.addWidget(self.reset_button)
         layout.addLayout(playback)
 
         layout.addWidget(self._section_label("Boat Status"))
@@ -165,9 +184,36 @@ class MainWindow(QMainWindow):
         label.setStyleSheet("font-size: 14px; font-weight: 600; margin-top: 8px;")
         return label
 
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if event.isAutoRepeat():
+            return
+
+        if not self._handle_key(event.key()):
+            super().keyPressEvent(event)
+
+    def _handle_key(self, key: int) -> bool:
+        user_boat = self._user_boat()
+        if user_boat is None:
+            return False
+
+        wind_from = self.scenario.wind_model.base_direction_degrees
+        if key == Qt.Key.Key_Up:
+            steer_toward_wind(user_boat, wind_from, 5.0)
+        elif key == Qt.Key.Key_Down:
+            steer_away_from_wind(user_boat, wind_from, 5.0)
+        elif key == Qt.Key.Key_T:
+            tack(user_boat, wind_from)
+        else:
+            return False
+
+        self.canvas.update()
+        self._refresh_boat_status()
+        return True
+
     def _apply_selected_course_preset(self) -> None:
         race_format = self._selected_race_format()
         self.scenario.course = course_for_format(race_format)
+        reset_boats_to_start(self.scenario)
         self.canvas.update()
         self._refresh_controls_from_scenario()
         self.statusBar().showMessage(f"Applied {race_format.value} course preset")
@@ -232,6 +278,31 @@ class MainWindow(QMainWindow):
         self.canvas.update()
         self._refresh_boat_status()
 
+    def _start_simulation(self) -> None:
+        self._update_scenario_from_controls()
+        self.scenario.race_state.is_running = True
+        self._timer.start()
+        self.canvas.setFocus()
+        self.statusBar().showMessage("Simulation running")
+
+    def _pause_simulation(self) -> None:
+        self.scenario.race_state.is_running = False
+        self._timer.stop()
+        self.statusBar().showMessage("Simulation paused")
+
+    def _reset_simulation(self) -> None:
+        self._pause_simulation()
+        reset_boats_to_start(self.scenario)
+        self.canvas.update()
+        self._refresh_boat_status()
+        self.statusBar().showMessage("Simulation reset")
+
+    def _step_simulation(self) -> None:
+        self._update_scenario_from_controls()
+        step_scenario(self.scenario, self._timer.interval() / 1000.0)
+        self.canvas.update()
+        self._refresh_boat_status()
+
     def _update_scenario_from_controls(self) -> None:
         self.scenario.course.race_format = self._selected_race_format()
         self.scenario.wind_model.mode = self._selected_wind_mode()
@@ -256,18 +327,18 @@ class MainWindow(QMainWindow):
         self.delete_invalid_marks_button.setEnabled(bool(invalid_marks_for(self.scenario.course)))
 
     def _refresh_boat_status(self) -> None:
-        user_boat = next(
-            (boat for boat in self.scenario.boats if boat.control_mode == BoatControlMode.USER),
-            self.scenario.boats[0] if self.scenario.boats else None,
-        )
+        user_boat = self._user_boat()
         if user_boat is None:
             self.status.setText("No boats in scenario")
             return
 
+        twa = true_wind_angle(user_boat.heading_degrees, self.scenario.wind_model.base_direction_degrees)
         self.status.setText(
             f"Controlled boat: {user_boat.name}\n"
             f"Heading: {user_boat.heading_degrees:.0f} deg\n"
             f"Speed: {user_boat.speed_knots:.1f} kt\n"
+            f"TWA: {twa:.0f} deg\n"
+            f"Elapsed: {self.scenario.race_state.elapsed_seconds:.1f} s\n"
             f"Course: {self.scenario.course.race_format.value}"
         )
 
@@ -286,6 +357,12 @@ class MainWindow(QMainWindow):
         if boats and all(boat.control_mode != BoatControlMode.USER for boat in boats):
             boats[0].control_mode = BoatControlMode.USER
             boats[0].name = "USER"
+
+    def _user_boat(self) -> Boat | None:
+        return next(
+            (boat for boat in self.scenario.boats if boat.control_mode == BoatControlMode.USER),
+            self.scenario.boats[0] if self.scenario.boats else None,
+        )
 
     def _selected_race_format(self) -> RaceFormat:
         return RaceFormat(self.format_combo.currentData())

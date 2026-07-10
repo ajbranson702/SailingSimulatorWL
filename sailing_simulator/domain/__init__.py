@@ -26,6 +26,13 @@ from sailing_simulator.domain.presets import (
     valid_mark_types_for,
 )
 from sailing_simulator.domain.serialization import load_scenario, save_scenario
+from sailing_simulator.domain.simulation import (
+    reset_boats_to_start,
+    step_scenario,
+    tack,
+    target_boat_speed,
+    true_wind_angle,
+)
 from sailing_simulator.domain.validation import validate_course
 
 __all__ = [
@@ -53,6 +60,11 @@ __all__ = [
     "remove_invalid_marks",
     "required_mark_types_for",
     "save_scenario",
+    "reset_boats_to_start",
+    "step_scenario",
+    "tack",
+    "target_boat_speed",
+    "true_wind_angle",
     "valid_mark_types_for",
     "validate_course",
 ]

@@ -75,6 +75,7 @@ class Boat:
     speed_knots: float = 0.0
     control_mode: BoatControlMode = BoatControlMode.AI
     target_leg_index: int = 0
+    track: list[Vector2] = field(default_factory=list)
 
 
 @dataclass
