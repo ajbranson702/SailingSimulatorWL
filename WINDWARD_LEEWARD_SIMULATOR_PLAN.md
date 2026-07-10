@@ -226,7 +226,7 @@ The first useful version should include:
 - Course canvas with draggable start line, windward mark, and leeward/finish mark.
 - Boat count setting.
 - One user boat and simple AI boats.
-- `W2` and `W4` course formats.
+- `W2`, `T3`, `W4`, and `W6` course formats.
 - Static and oscillating wind.
 - Base wind strength.
 - Wind arrow grid.
@@ -272,7 +272,7 @@ Deliverable: app launches on Windows and displays an empty simulator screen.
 
 - Draw start line and marks.
 - Allow dragging start line endpoints and marks.
-- Add course presets for `W2` and `W4`.
+- Add course presets for `W2`, `T3`, `W4`, and `W6`.
 - Validate required course objects.
 - Save/load a basic scenario JSON file.
 
@@ -291,7 +291,7 @@ Deliverable: user can sail a boat around the course under static wind.
 ### Phase 4: Race State and Course Progress
 
 - Add race start, pause, reset, and simulation speed controls.
-- Implement leg sequencing for `W2` and `W4`.
+- Implement leg sequencing for `W2`, `T3`, `W4`, and `W6`.
 - Detect mark rounding and finish crossing.
 - Show elapsed time and current leg.
 - Add basic boundary handling.

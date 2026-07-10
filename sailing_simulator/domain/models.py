@@ -133,14 +133,9 @@ class Scenario:
 
 
 def default_scenario() -> Scenario:
-    course = Course(
-        race_format=RaceFormat.W2,
-        marks=[
-            Mark(MarkType.WINDWARD, Vector2(460.0, 160.0), "W"),
-            Mark(MarkType.LEEWARD, Vector2(460.0, 720.0), "L"),
-            Mark(MarkType.GYBE, Vector2(650.0, 420.0), "G"),
-        ],
-    )
+    from sailing_simulator.domain.presets import course_for_format
+
+    course = course_for_format(RaceFormat.W2)
     boats = [
         Boat("USER", Vector2(420.0, 735.0), 315.0, control_mode=BoatControlMode.USER),
         Boat("AI 1", Vector2(465.0, 745.0), 315.0),

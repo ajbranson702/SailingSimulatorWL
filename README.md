@@ -4,13 +4,15 @@ Windows desktop simulator for experimenting with windward-leeward sailing race s
 
 ## Current Status
 
-Phase 1 is underway:
+Phase 2 is underway:
 
 - PySide6 app shell
 - Single simulator screen
-- Course canvas placeholder
+- Draggable course marks and start-line endpoints
 - Scenario controls panel
 - Initial domain data model
+- Course presets for W2, T3, W4, and W6
+- Scenario save/load JSON support
 - Basic domain tests
 
 ## Environment

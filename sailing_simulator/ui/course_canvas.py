@@ -1,20 +1,35 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
-from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QWidget
 
-from sailing_simulator.domain.models import BoatControlMode, Scenario
+from sailing_simulator.domain.models import BoatControlMode, Scenario, Vector2
+
+
+@dataclass(frozen=True)
+class DragTarget:
+    kind: str
+    index: int | None = None
 
 
 class CourseCanvas(QWidget):
+    scenario_changed = Signal()
+
     def __init__(self, scenario: Scenario, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.scenario = scenario
+        self._drag_target: DragTarget | None = None
         self.setMinimumSize(760, 720)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+    def set_scenario(self, scenario: Scenario) -> None:
+        self.scenario = scenario
+        self._drag_target = None
+        self.update()
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
@@ -28,6 +43,34 @@ class CourseCanvas(QWidget):
         self._draw_wind_grid(painter, rect)
         self._draw_course_objects(painter, rect)
         self._draw_boats(painter, rect)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+
+        target = self._hit_test(event.position())
+        if target is None:
+            return
+
+        self._drag_target = target
+        self.setCursor(Qt.CursorShape.ClosedHandCursor)
+        self._move_drag_target(event.position())
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        if self._drag_target is not None:
+            self._move_drag_target(event.position())
+            return
+
+        if self._hit_test(event.position()) is not None:
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+        else:
+            self.unsetCursor()
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton and self._drag_target is not None:
+            self._drag_target = None
+            self.unsetCursor()
+            self.scenario_changed.emit()
 
     def _draw_course_boundary(self, painter: QPainter, rect: QRectF) -> None:
         painter.setPen(QPen(QColor("#4b6b75"), 2))
@@ -58,6 +101,10 @@ class CourseCanvas(QWidget):
 
         painter.setPen(QPen(QColor("#1f2933"), 4))
         painter.drawLine(pin, committee)
+        painter.setPen(QPen(QColor("#1f2933"), 2))
+        painter.setBrush(QColor("#f8fafc"))
+        painter.drawEllipse(pin, 7, 7)
+        painter.drawEllipse(committee, 7, 7)
         painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         painter.drawText(pin + QPointF(-14, -10), "PIN")
         painter.drawText(committee + QPointF(8, -10), "RC")
@@ -66,7 +113,7 @@ class CourseCanvas(QWidget):
         painter.setBrush(QColor("#f4b942"))
         for mark in self.scenario.course.marks:
             center = self._to_screen(mark.position, rect)
-            painter.drawEllipse(center, 11, 11)
+            painter.drawEllipse(center, 12, 12)
             painter.drawText(center + QPointF(14, 5), mark.label)
 
     def _draw_boats(self, painter: QPainter, rect: QRectF) -> None:
@@ -127,8 +174,52 @@ class CourseCanvas(QWidget):
     def _normalize_degrees(self, degrees: float) -> float:
         return math.remainder(degrees, 360.0)
 
+    def _hit_test(self, position: QPointF) -> DragTarget | None:
+        rect = self._course_rect()
+        start = self.scenario.course.start_line
+        candidates: list[tuple[float, DragTarget]] = [
+            (self._distance(position, self._to_screen(start.pin, rect)), DragTarget("pin")),
+            (self._distance(position, self._to_screen(start.committee_boat, rect)), DragTarget("committee_boat")),
+        ]
+
+        for index, mark in enumerate(self.scenario.course.marks):
+            candidates.append((self._distance(position, self._to_screen(mark.position, rect)), DragTarget("mark", index)))
+
+        distance, target = min(candidates, key=lambda candidate: candidate[0])
+        return target if distance <= 18.0 else None
+
+    def _move_drag_target(self, position: QPointF) -> None:
+        if self._drag_target is None:
+            return
+
+        course_point = self._to_course(position, self._course_rect())
+        course = self.scenario.course
+        if self._drag_target.kind == "pin":
+            course.start_line.pin = course_point
+        elif self._drag_target.kind == "committee_boat":
+            course.start_line.committee_boat = course_point
+        elif self._drag_target.kind == "mark" and self._drag_target.index is not None:
+            course.marks[self._drag_target.index].position = course_point
+
+        self.update()
+
+    def _course_rect(self) -> QRectF:
+        return QRectF(self.rect().adjusted(18, 18, -18, -18))
+
     def _to_screen(self, point, rect: QRectF) -> QPointF:
         course = self.scenario.course
         x = rect.left() + (point.x / course.boundary_width) * rect.width()
         y = rect.top() + (point.y / course.boundary_height) * rect.height()
         return QPointF(x, y)
+
+    def _to_course(self, point: QPointF, rect: QRectF) -> Vector2:
+        course = self.scenario.course
+        x_ratio = self._clamp((point.x() - rect.left()) / rect.width(), 0.0, 1.0)
+        y_ratio = self._clamp((point.y() - rect.top()) / rect.height(), 0.0, 1.0)
+        return Vector2(x_ratio * course.boundary_width, y_ratio * course.boundary_height)
+
+    def _distance(self, first: QPointF, second: QPointF) -> float:
+        return math.hypot(first.x() - second.x(), first.y() - second.y())
+
+    def _clamp(self, value: float, minimum: float, maximum: float) -> float:
+        return max(minimum, min(maximum, value))
