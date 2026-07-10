@@ -54,6 +54,7 @@ def scenario_to_dict(scenario: Scenario) -> dict[str, Any]:
         "race_state": {
             "elapsed_seconds": scenario.race_state.elapsed_seconds,
             "is_running": scenario.race_state.is_running,
+            "time_scale": scenario.race_state.time_scale,
         },
     }
 

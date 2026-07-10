@@ -10,6 +10,7 @@ def test_default_scenario_has_phase_one_course_and_boats():
     assert scenario.course.race_format == RaceFormat.W2
     assert len(scenario.course.marks) == 2
     assert len(scenario.boats) == 3
+    assert scenario.race_state.time_scale == 10.0
 
 
 def test_supported_race_formats_include_triangle_and_long_course():
@@ -37,11 +38,13 @@ def test_scenario_serialization_round_trip_preserves_course():
     scenario = default_scenario()
     scenario.course = course_for_format(RaceFormat.T3)
     scenario.wind_model.base_speed_knots = 14.0
+    scenario.race_state.time_scale = 25.0
 
     restored = scenario_from_dict(scenario_to_dict(scenario))
 
     assert restored.course.race_format == RaceFormat.T3
     assert restored.wind_model.base_speed_knots == 14.0
+    assert restored.race_state.time_scale == 25.0
     assert [mark.mark_type for mark in restored.course.marks] == [
         MarkType.WINDWARD,
         MarkType.GYBE,

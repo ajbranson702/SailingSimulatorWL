@@ -116,6 +116,15 @@ class MainWindow(QMainWindow):
         self.gust_percent.valueChanged.connect(self._update_scenario_from_controls)
         form.addRow("Gusts", self.gust_percent)
 
+        self.time_scale = QDoubleSpinBox()
+        self.time_scale.setRange(1.0, 50.0)
+        self.time_scale.setSingleStep(1.0)
+        self.time_scale.setDecimals(0)
+        self.time_scale.setSuffix("x")
+        self.time_scale.setValue(self.scenario.race_state.time_scale)
+        self.time_scale.valueChanged.connect(self._update_scenario_from_controls)
+        form.addRow("Sim speed", self.time_scale)
+
         layout.addLayout(form)
         layout.addWidget(self._section_label("Course"))
 
@@ -299,7 +308,8 @@ class MainWindow(QMainWindow):
 
     def _step_simulation(self) -> None:
         self._update_scenario_from_controls()
-        step_scenario(self.scenario, self._timer.interval() / 1000.0)
+        elapsed_seconds = (self._timer.interval() / 1000.0) * self.scenario.race_state.time_scale
+        step_scenario(self.scenario, elapsed_seconds)
         self.canvas.update()
         self._refresh_boat_status()
 
@@ -308,6 +318,7 @@ class MainWindow(QMainWindow):
         self.scenario.wind_model.mode = self._selected_wind_mode()
         self.scenario.wind_model.base_speed_knots = self.wind_strength.value()
         self.scenario.wind_model.gust_percent = self.gust_percent.value()
+        self.scenario.race_state.time_scale = self.time_scale.value()
 
     def _refresh_controls_from_scenario(self) -> None:
         self.format_combo.blockSignals(True)
@@ -319,6 +330,7 @@ class MainWindow(QMainWindow):
         self.wind_mode.setCurrentIndex(self.wind_mode.findData(self.scenario.wind_model.mode.value))
         self.wind_strength.setValue(self.scenario.wind_model.base_speed_knots)
         self.gust_percent.setValue(self.scenario.wind_model.gust_percent)
+        self.time_scale.setValue(self.scenario.race_state.time_scale)
         self._refresh_course_controls()
         self._refresh_boat_status()
 
@@ -338,6 +350,7 @@ class MainWindow(QMainWindow):
             f"Heading: {user_boat.heading_degrees:.0f} deg\n"
             f"Speed: {user_boat.speed_knots:.1f} kt\n"
             f"TWA: {twa:.0f} deg\n"
+            f"Sim speed: {self.scenario.race_state.time_scale:.0f}x\n"
             f"Elapsed: {self.scenario.race_state.elapsed_seconds:.1f} s\n"
             f"Course: {self.scenario.course.race_format.value}"
         )

@@ -16,6 +16,7 @@ Phase 3 is underway:
 - User boat movement under static wind
 - Default polar lookup with no-go-zone slowdown
 - Keyboard steering and tack controls
+- Adjustable simulation speed
 - Boat track rendering
 - Basic domain tests
 
@@ -25,6 +26,7 @@ Phase 3 is underway:
 - Down arrow: bear away from the wind
 - `T`: tack
 - Start/Pause/Reset: control simulation playback
+- Sim speed: run the simulation from 1x to 50x real time
 
 ## Environment
 

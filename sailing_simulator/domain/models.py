@@ -120,6 +120,7 @@ class TerrainObject:
 class RaceState:
     elapsed_seconds: float = 0.0
     is_running: bool = False
+    time_scale: float = 10.0
 
 
 @dataclass
