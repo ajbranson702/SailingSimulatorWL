@@ -1,0 +1,7 @@
+.venv/
+.venv_app/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.idea/
+.agents/
