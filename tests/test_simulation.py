@@ -1,5 +1,6 @@
-from sailing_simulator.domain.models import BoatControlMode, default_scenario
+from sailing_simulator.domain.models import BoatControlMode, RaceEventType, Vector2, default_scenario
 from sailing_simulator.domain.simulation import (
+    detect_race_events,
     step_scenario,
     tack,
     target_boat_speed,
@@ -51,3 +52,35 @@ def test_tack_turns_boat_roughly_onto_opposite_tack_and_slows():
 
     assert boat.heading_degrees == 45.0
     assert boat.speed_knots == 3.25
+
+
+def test_finish_crossing_creates_event_once():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    previous = Vector2(450.0, 710.0)
+    boat.position = Vector2(450.0, 690.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.name in scenario.race_state.finished_boats
+    assert [event.event_type for event in scenario.race_state.events].count(RaceEventType.FINISH_CROSSED) == 1
+
+
+def test_boat_collision_creates_event():
+    scenario = default_scenario()
+    scenario.boats[0].position = Vector2(400.0, 400.0)
+    scenario.boats[1].position = Vector2(410.0, 400.0)
+
+    detect_race_events(scenario, {})
+
+    assert any(event.event_type == RaceEventType.BOAT_COLLISION for event in scenario.race_state.events)
+
+
+def test_mark_collision_creates_event():
+    scenario = default_scenario()
+    scenario.boats[0].position = scenario.course.marks[0].position
+
+    detect_race_events(scenario, {})
+
+    assert any(event.event_type == RaceEventType.MARK_COLLISION for event in scenario.race_state.events)

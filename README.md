@@ -18,6 +18,7 @@ Phase 3 is underway:
 - Keyboard steering and tack controls
 - Adjustable simulation speed
 - Boat track rendering
+- Basic finish-line and collision event detection
 - Basic domain tests
 
 ## Controls

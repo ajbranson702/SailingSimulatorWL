@@ -1,20 +1,26 @@
 from __future__ import annotations
 
+import itertools
 import math
 
-from sailing_simulator.domain.models import Boat, BoatControlMode, Polar, Scenario, Vector2
+from sailing_simulator.domain.models import Boat, BoatControlMode, Polar, RaceEvent, RaceEventType, Scenario, Vector2
 
 MIN_UPWIND_ANGLE_DEGREES = 45.0
 COURSE_UNITS_PER_NAUTICAL_MILE = 1800.0
 MAX_TRACK_POINTS = 300
+BOAT_COLLISION_RADIUS = 28.0
+MARK_COLLISION_RADIUS = 22.0
 
 
 def step_scenario(scenario: Scenario, elapsed_seconds: float) -> None:
+    previous_positions = {boat.name: boat.position for boat in scenario.boats}
+    scenario.race_state.events = []
     scenario.race_state.elapsed_seconds += elapsed_seconds
     for boat in scenario.boats:
         if boat.control_mode == BoatControlMode.AI:
             continue
         step_boat(boat, scenario, elapsed_seconds)
+    detect_race_events(scenario, previous_positions)
 
 
 def step_boat(boat: Boat, scenario: Scenario, elapsed_seconds: float) -> None:
@@ -89,6 +95,64 @@ def reset_boats_to_start(scenario: Scenario) -> None:
         boat.speed_knots = 0.0
         boat.track = []
     scenario.race_state.elapsed_seconds = 0.0
+    scenario.race_state.events = []
+    scenario.race_state.finished_boats = set()
+
+
+def detect_race_events(scenario: Scenario, previous_positions: dict[str, Vector2]) -> None:
+    detect_finish_crossings(scenario, previous_positions)
+    detect_boat_collisions(scenario)
+    detect_mark_collisions(scenario)
+
+
+def detect_finish_crossings(scenario: Scenario, previous_positions: dict[str, Vector2]) -> None:
+    start = scenario.course.start_line
+    for boat in scenario.boats:
+        if boat.name in scenario.race_state.finished_boats:
+            continue
+
+        previous = previous_positions.get(boat.name)
+        if previous is None or previous == boat.position:
+            continue
+
+        if segments_intersect(previous, boat.position, start.pin, start.committee_boat):
+            scenario.race_state.finished_boats.add(boat.name)
+            add_event(
+                scenario,
+                RaceEventType.FINISH_CROSSED,
+                f"{boat.name} crossed the finish line.",
+            )
+
+
+def detect_boat_collisions(scenario: Scenario) -> None:
+    for first, second in itertools.combinations(scenario.boats, 2):
+        if distance(first.position, second.position) <= BOAT_COLLISION_RADIUS:
+            add_event(
+                scenario,
+                RaceEventType.BOAT_COLLISION,
+                f"{first.name} collided with {second.name}.",
+            )
+
+
+def detect_mark_collisions(scenario: Scenario) -> None:
+    for boat in scenario.boats:
+        for mark in scenario.course.marks:
+            if distance(boat.position, mark.position) <= MARK_COLLISION_RADIUS:
+                add_event(
+                    scenario,
+                    RaceEventType.MARK_COLLISION,
+                    f"{boat.name} hit mark {mark.label}.",
+                )
+
+
+def add_event(scenario: Scenario, event_type: RaceEventType, message: str) -> None:
+    scenario.race_state.events.append(
+        RaceEvent(
+            event_type=event_type,
+            message=message,
+            elapsed_seconds=scenario.race_state.elapsed_seconds,
+        )
+    )
 
 
 def true_wind_angle(heading_degrees: float, wind_from_degrees: float) -> float:
@@ -125,6 +189,42 @@ def interpolate(lower_x: float, lower_y: float, upper_x: float, upper_y: float, 
 
 def clamp_to_course(position: Vector2, width: float, height: float) -> Vector2:
     return Vector2(max(0.0, min(width, position.x)), max(0.0, min(height, position.y)))
+
+
+def distance(first: Vector2, second: Vector2) -> float:
+    return math.hypot(first.x - second.x, first.y - second.y)
+
+
+def segments_intersect(first_start: Vector2, first_end: Vector2, second_start: Vector2, second_end: Vector2) -> bool:
+    first_direction = orientation(first_start, first_end, second_start)
+    second_direction = orientation(first_start, first_end, second_end)
+    third_direction = orientation(second_start, second_end, first_start)
+    fourth_direction = orientation(second_start, second_end, first_end)
+
+    if first_direction == 0 and point_on_segment(second_start, first_start, first_end):
+        return True
+    if second_direction == 0 and point_on_segment(second_end, first_start, first_end):
+        return True
+    if third_direction == 0 and point_on_segment(first_start, second_start, second_end):
+        return True
+    if fourth_direction == 0 and point_on_segment(first_end, second_start, second_end):
+        return True
+
+    return first_direction != second_direction and third_direction != fourth_direction
+
+
+def orientation(first: Vector2, second: Vector2, third: Vector2) -> int:
+    value = (second.y - first.y) * (third.x - second.x) - (second.x - first.x) * (third.y - second.y)
+    if abs(value) < 1e-9:
+        return 0
+    return 1 if value > 0 else 2
+
+
+def point_on_segment(point: Vector2, segment_start: Vector2, segment_end: Vector2) -> bool:
+    return (
+        min(segment_start.x, segment_end.x) <= point.x <= max(segment_start.x, segment_end.x)
+        and min(segment_start.y, segment_end.y) <= point.y <= max(segment_start.y, segment_end.y)
+    )
 
 
 def append_track_point(boat: Boat) -> None:

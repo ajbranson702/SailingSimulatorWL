@@ -45,6 +45,12 @@ class TerrainType(str, Enum):
     CLIFF = "cliff"
 
 
+class RaceEventType(str, Enum):
+    BOAT_COLLISION = "boat_collision"
+    MARK_COLLISION = "mark_collision"
+    FINISH_CROSSED = "finish_crossed"
+
+
 @dataclass
 class StartLine:
     pin: Vector2 = field(default_factory=lambda: Vector2(360.0, 700.0))
@@ -121,6 +127,15 @@ class RaceState:
     elapsed_seconds: float = 0.0
     is_running: bool = False
     time_scale: float = 10.0
+    events: list[RaceEvent] = field(default_factory=list)
+    finished_boats: set[str] = field(default_factory=set)
+
+
+@dataclass
+class RaceEvent:
+    event_type: RaceEventType
+    message: str
+    elapsed_seconds: float
 
 
 @dataclass

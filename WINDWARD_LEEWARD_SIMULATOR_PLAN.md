@@ -295,6 +295,7 @@ Status: initial implementation complete.
 - Add race start, pause, reset, and simulation speed controls.
 - Implement leg sequencing for `W2`, `T3`, `W4`, and `W6`.
 - Detect mark rounding and finish crossing.
+- Detect basic boat, mark, and finish-line events.
 - Show elapsed time and current leg.
 - Add basic boundary handling.
 

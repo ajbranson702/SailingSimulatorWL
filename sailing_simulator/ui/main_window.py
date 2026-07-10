@@ -352,7 +352,8 @@ class MainWindow(QMainWindow):
             f"TWA: {twa:.0f} deg\n"
             f"Sim speed: {self.scenario.race_state.time_scale:.0f}x\n"
             f"Elapsed: {self.scenario.race_state.elapsed_seconds:.1f} s\n"
-            f"Course: {self.scenario.course.race_format.value}"
+            f"Course: {self.scenario.course.race_format.value}\n"
+            f"{self._event_status_text()}"
         )
 
     def _set_boat_count(self, count: int) -> None:
@@ -376,6 +377,14 @@ class MainWindow(QMainWindow):
             (boat for boat in self.scenario.boats if boat.control_mode == BoatControlMode.USER),
             self.scenario.boats[0] if self.scenario.boats else None,
         )
+
+    def _event_status_text(self) -> str:
+        if self.scenario.race_state.events:
+            return "\n".join(event.message for event in self.scenario.race_state.events[-3:])
+        if self.scenario.race_state.finished_boats:
+            finished = ", ".join(sorted(self.scenario.race_state.finished_boats))
+            return f"Finished: {finished}"
+        return "Events: none"
 
     def _selected_race_format(self) -> RaceFormat:
         return RaceFormat(self.format_combo.currentData())

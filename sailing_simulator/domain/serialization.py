@@ -11,6 +11,8 @@ from sailing_simulator.domain.models import (
     Mark,
     MarkType,
     Polar,
+    RaceEvent,
+    RaceEventType,
     RaceFormat,
     RaceState,
     Scenario,
@@ -55,6 +57,8 @@ def scenario_to_dict(scenario: Scenario) -> dict[str, Any]:
             "elapsed_seconds": scenario.race_state.elapsed_seconds,
             "is_running": scenario.race_state.is_running,
             "time_scale": scenario.race_state.time_scale,
+            "events": [race_event_to_dict(event) for event in scenario.race_state.events],
+            "finished_boats": sorted(scenario.race_state.finished_boats),
         },
     }
 
@@ -67,7 +71,33 @@ def scenario_from_dict(data: dict[str, Any]) -> Scenario:
         wind_field=WindField(**data.get("wind_field", {})),
         polar=polar_from_dict(data.get("polar", {})),
         terrain=[terrain_from_dict(terrain) for terrain in data.get("terrain", [])],
-        race_state=RaceState(**data.get("race_state", {})),
+        race_state=race_state_from_dict(data.get("race_state", {})),
+    )
+
+
+def race_state_from_dict(data: dict[str, Any]) -> RaceState:
+    return RaceState(
+        elapsed_seconds=float(data.get("elapsed_seconds", 0.0)),
+        is_running=bool(data.get("is_running", False)),
+        time_scale=float(data.get("time_scale", 10.0)),
+        events=[race_event_from_dict(event) for event in data.get("events", [])],
+        finished_boats=set(data.get("finished_boats", [])),
+    )
+
+
+def race_event_to_dict(event: RaceEvent) -> dict[str, Any]:
+    return {
+        "event_type": event.event_type.value,
+        "message": event.message,
+        "elapsed_seconds": event.elapsed_seconds,
+    }
+
+
+def race_event_from_dict(data: dict[str, Any]) -> RaceEvent:
+    return RaceEvent(
+        event_type=RaceEventType(data["event_type"]),
+        message=data["message"],
+        elapsed_seconds=float(data.get("elapsed_seconds", 0.0)),
     )
 
 
