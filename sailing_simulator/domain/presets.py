@@ -36,6 +36,10 @@ def required_mark_types_for(race_format: RaceFormat) -> set[MarkType]:
     return {MarkType.WINDWARD, MarkType.LEEWARD}
 
 
+def valid_mark_types_for(race_format: RaceFormat) -> set[MarkType]:
+    return required_mark_types_for(race_format)
+
+
 def adapt_course_to_format(course: Course, race_format: RaceFormat) -> None:
     course.race_format = race_format
     if race_format == RaceFormat.T3:
@@ -43,15 +47,32 @@ def adapt_course_to_format(course: Course, race_format: RaceFormat) -> None:
         _ensure_mark(course, MarkType.WINDWARD, Vector2(460.0, 160.0), "W")
         _ensure_mark(course, MarkType.GYBE, Vector2(650.0, 420.0), "G")
         _ensure_mark(course, MarkType.FINISH, Vector2(460.0, 720.0), "F")
+        remove_invalid_marks(course)
         return
 
     _convert_mark(course, MarkType.FINISH, MarkType.LEEWARD, "L/F")
     _ensure_mark(course, MarkType.WINDWARD, Vector2(460.0, 160.0), "W")
     _ensure_mark(course, MarkType.LEEWARD, Vector2(460.0, 720.0), "L/F")
+    remove_invalid_marks(course)
 
 
 def add_gybe_mark(course: Course) -> Mark:
     return _ensure_mark(course, MarkType.GYBE, Vector2(650.0, 420.0), "G")
+
+
+def invalid_marks_for(course: Course) -> list[Mark]:
+    valid_types = valid_mark_types_for(course.race_format)
+    return [mark for mark in course.marks if mark.mark_type not in valid_types]
+
+
+def remove_invalid_marks(course: Course) -> list[Mark]:
+    invalid_marks = invalid_marks_for(course)
+    if not invalid_marks:
+        return []
+
+    invalid_ids = {id(mark) for mark in invalid_marks}
+    course.marks = [mark for mark in course.marks if id(mark) not in invalid_ids]
+    return invalid_marks
 
 
 def _ensure_mark(course: Course, mark_type: MarkType, position: Vector2, label: str) -> Mark:

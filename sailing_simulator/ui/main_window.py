@@ -18,7 +18,13 @@ from PySide6.QtWidgets import (
 )
 
 from sailing_simulator.domain.models import Boat, BoatControlMode, RaceFormat, Vector2, WindMode, default_scenario
-from sailing_simulator.domain.presets import adapt_course_to_format, add_gybe_mark, course_for_format
+from sailing_simulator.domain.presets import (
+    adapt_course_to_format,
+    add_gybe_mark,
+    course_for_format,
+    invalid_marks_for,
+    remove_invalid_marks,
+)
 from sailing_simulator.domain.serialization import load_scenario, save_scenario
 from sailing_simulator.domain.validation import validate_course
 from sailing_simulator.ui.course_canvas import CourseCanvas
@@ -112,7 +118,10 @@ class MainWindow(QMainWindow):
         mark_actions = QHBoxLayout()
         self.add_gybe_mark_button = QPushButton("Add Gybe Mark")
         self.add_gybe_mark_button.clicked.connect(self._add_gybe_mark)
+        self.delete_invalid_marks_button = QPushButton("Delete Invalid Marks")
+        self.delete_invalid_marks_button.clicked.connect(self._delete_invalid_marks)
         mark_actions.addWidget(self.add_gybe_mark_button)
+        mark_actions.addWidget(self.delete_invalid_marks_button)
         layout.addLayout(mark_actions)
 
         file_actions = QHBoxLayout()
@@ -180,6 +189,12 @@ class MainWindow(QMainWindow):
         self._refresh_boat_status()
         self.statusBar().showMessage("Gybe mark added for T course")
 
+    def _delete_invalid_marks(self) -> None:
+        removed = remove_invalid_marks(self.scenario.course)
+        self.canvas.update()
+        self._refresh_course_controls()
+        self.statusBar().showMessage(f"Deleted {len(removed)} invalid mark(s)")
+
     def _validate_course(self) -> None:
         self._update_scenario_from_controls()
         errors = validate_course(self.scenario.course)
@@ -238,6 +253,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_course_controls(self) -> None:
         self.add_gybe_mark_button.setEnabled(self.scenario.course.race_format == RaceFormat.T3)
+        self.delete_invalid_marks_button.setEnabled(bool(invalid_marks_for(self.scenario.course)))
 
     def _refresh_boat_status(self) -> None:
         user_boat = next(

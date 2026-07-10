@@ -1,5 +1,5 @@
 from sailing_simulator.domain.models import MarkType, RaceFormat, default_scenario
-from sailing_simulator.domain.presets import adapt_course_to_format, course_for_format
+from sailing_simulator.domain.presets import adapt_course_to_format, course_for_format, remove_invalid_marks
 from sailing_simulator.domain.serialization import scenario_from_dict, scenario_to_dict
 from sailing_simulator.domain.validation import validate_course
 
@@ -68,4 +68,25 @@ def test_adapting_t3_back_to_w_course_uses_finish_as_leeward():
     adapt_course_to_format(course, RaceFormat.W4)
 
     assert course.race_format == RaceFormat.W4
-    assert MarkType.LEEWARD in {mark.mark_type for mark in course.marks}
+    assert {mark.mark_type for mark in course.marks} == {
+        MarkType.WINDWARD,
+        MarkType.LEEWARD,
+    }
+
+
+def test_adapting_t3_to_w2_removes_gybe_mark():
+    course = course_for_format(RaceFormat.T3)
+
+    adapt_course_to_format(course, RaceFormat.W2)
+
+    assert MarkType.GYBE not in {mark.mark_type for mark in course.marks}
+
+
+def test_remove_invalid_marks_deletes_marks_not_allowed_for_format():
+    course = course_for_format(RaceFormat.W2)
+    course.marks.append(course_for_format(RaceFormat.T3).marks[1])
+
+    removed = remove_invalid_marks(course)
+
+    assert [mark.mark_type for mark in removed] == [MarkType.GYBE]
+    assert MarkType.GYBE not in {mark.mark_type for mark in course.marks}
