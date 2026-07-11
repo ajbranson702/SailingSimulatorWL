@@ -25,6 +25,7 @@ from sailing_simulator.domain.presets import (
     invalid_marks_for,
     remove_invalid_marks,
 )
+from sailing_simulator.domain.race_progress import target_label_for, total_targets_for
 from sailing_simulator.domain.serialization import load_scenario, save_scenario
 from sailing_simulator.domain.simulation import (
     reset_boats_to_start,
@@ -230,6 +231,7 @@ class MainWindow(QMainWindow):
     def _on_course_format_changed(self) -> None:
         race_format = self._selected_race_format()
         adapt_course_to_format(self.scenario.course, race_format)
+        reset_boats_to_start(self.scenario)
         self.canvas.update()
         self._refresh_course_controls()
         self._refresh_boat_status()
@@ -345,6 +347,7 @@ class MainWindow(QMainWindow):
             return
 
         twa = true_wind_angle(user_boat.heading_degrees, self.scenario.wind_model.base_direction_degrees)
+        progress_text = self._boat_progress_text(user_boat)
         self.status.setText(
             f"Controlled boat: {user_boat.name}\n"
             f"Heading: {user_boat.heading_degrees:.0f} deg\n"
@@ -353,6 +356,7 @@ class MainWindow(QMainWindow):
             f"Sim speed: {self.scenario.race_state.time_scale:.0f}x\n"
             f"Elapsed: {self.scenario.race_state.elapsed_seconds:.1f} s\n"
             f"Course: {self.scenario.course.race_format.value}\n"
+            f"{progress_text}\n"
             f"{self._event_status_text()}"
         )
 
@@ -377,6 +381,16 @@ class MainWindow(QMainWindow):
             (boat for boat in self.scenario.boats if boat.control_mode == BoatControlMode.USER),
             self.scenario.boats[0] if self.scenario.boats else None,
         )
+
+    def _boat_progress_text(self, boat: Boat) -> str:
+        if boat.is_finished and boat.finish_time_seconds is not None:
+            return f"Finished: {boat.finish_time_seconds:.1f} s"
+        if not boat.has_started:
+            return "Target: start"
+
+        total_targets = total_targets_for(self.scenario.course)
+        next_target = target_label_for(self.scenario.course, boat.target_leg_index)
+        return f"Target: {next_target} ({boat.target_leg_index}/{total_targets})"
 
     def _event_status_text(self) -> str:
         if self.scenario.race_state.events:

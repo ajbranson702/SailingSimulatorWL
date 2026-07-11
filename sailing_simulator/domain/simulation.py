@@ -4,6 +4,7 @@ import itertools
 import math
 
 from sailing_simulator.domain.models import Boat, BoatControlMode, Polar, RaceEvent, RaceEventType, Scenario, Vector2
+from sailing_simulator.domain.race_progress import target_mark_for, total_targets_for
 
 MIN_UPWIND_ANGLE_DEGREES = 45.0
 COURSE_UNITS_PER_NAUTICAL_MILE = 1800.0
@@ -94,21 +95,26 @@ def reset_boats_to_start(scenario: Scenario) -> None:
         boat.heading_degrees = 315.0
         boat.speed_knots = 0.0
         boat.track = []
+        boat.target_leg_index = 0
+        boat.has_started = False
+        boat.is_finished = False
+        boat.finish_time_seconds = None
     scenario.race_state.elapsed_seconds = 0.0
     scenario.race_state.events = []
     scenario.race_state.finished_boats = set()
 
 
 def detect_race_events(scenario: Scenario, previous_positions: dict[str, Vector2]) -> None:
-    detect_finish_crossings(scenario, previous_positions)
+    detect_start_or_finish_crossings(scenario, previous_positions)
+    detect_mark_roundings(scenario)
     detect_boat_collisions(scenario)
     detect_mark_collisions(scenario)
 
 
-def detect_finish_crossings(scenario: Scenario, previous_positions: dict[str, Vector2]) -> None:
+def detect_start_or_finish_crossings(scenario: Scenario, previous_positions: dict[str, Vector2]) -> None:
     start = scenario.course.start_line
     for boat in scenario.boats:
-        if boat.name in scenario.race_state.finished_boats:
+        if boat.is_finished:
             continue
 
         previous = previous_positions.get(boat.name)
@@ -116,11 +122,35 @@ def detect_finish_crossings(scenario: Scenario, previous_positions: dict[str, Ve
             continue
 
         if segments_intersect(previous, boat.position, start.pin, start.committee_boat):
-            scenario.race_state.finished_boats.add(boat.name)
+            if not boat.has_started:
+                boat.has_started = True
+                add_event(scenario, RaceEventType.START_CROSSED, f"{boat.name} started.")
+            elif boat.target_leg_index >= total_targets_for(scenario.course):
+                boat.is_finished = True
+                boat.finish_time_seconds = scenario.race_state.elapsed_seconds
+                scenario.race_state.finished_boats.add(boat.name)
+                add_event(
+                    scenario,
+                    RaceEventType.FINISH_CROSSED,
+                    f"{boat.name} finished in {boat.finish_time_seconds:.1f} seconds.",
+                )
+
+
+def detect_mark_roundings(scenario: Scenario) -> None:
+    for boat in scenario.boats:
+        if not boat.has_started or boat.is_finished:
+            continue
+
+        target = target_mark_for(scenario.course, boat.target_leg_index)
+        if target is None:
+            continue
+
+        if distance(boat.position, target.position) <= MARK_COLLISION_RADIUS:
+            boat.target_leg_index += 1
             add_event(
                 scenario,
-                RaceEventType.FINISH_CROSSED,
-                f"{boat.name} crossed the finish line.",
+                RaceEventType.MARK_ROUNDED,
+                f"{boat.name} rounded {target.label}.",
             )
 
 

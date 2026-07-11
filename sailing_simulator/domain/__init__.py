@@ -27,6 +27,7 @@ from sailing_simulator.domain.presets import (
     required_mark_types_for,
     valid_mark_types_for,
 )
+from sailing_simulator.domain.race_progress import mark_sequence_for, target_label_for, target_mark_for, total_targets_for
 from sailing_simulator.domain.serialization import load_scenario, save_scenario
 from sailing_simulator.domain.simulation import (
     reset_boats_to_start,
@@ -61,6 +62,7 @@ __all__ = [
     "course_for_format",
     "invalid_marks_for",
     "load_scenario",
+    "mark_sequence_for",
     "remove_invalid_marks",
     "required_mark_types_for",
     "save_scenario",
@@ -68,7 +70,10 @@ __all__ = [
     "step_scenario",
     "tack",
     "target_boat_speed",
+    "target_label_for",
+    "target_mark_for",
     "true_wind_angle",
+    "total_targets_for",
     "valid_mark_types_for",
     "validate_course",
 ]

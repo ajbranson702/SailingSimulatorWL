@@ -49,6 +49,8 @@ class RaceEventType(str, Enum):
     BOAT_COLLISION = "boat_collision"
     MARK_COLLISION = "mark_collision"
     FINISH_CROSSED = "finish_crossed"
+    MARK_ROUNDED = "mark_rounded"
+    START_CROSSED = "start_crossed"
 
 
 @dataclass
@@ -82,6 +84,9 @@ class Boat:
     control_mode: BoatControlMode = BoatControlMode.AI
     target_leg_index: int = 0
     track: list[Vector2] = field(default_factory=list)
+    has_started: bool = False
+    is_finished: bool = False
+    finish_time_seconds: float | None = None
 
 
 @dataclass

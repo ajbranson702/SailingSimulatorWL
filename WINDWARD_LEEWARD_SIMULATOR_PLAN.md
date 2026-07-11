@@ -301,6 +301,8 @@ Status: initial implementation complete.
 
 Deliverable: user can complete a simple windward-leeward race alone.
 
+Status: initial race-progress implementation complete.
+
 ### Phase 5: Wind Engine and Visualization
 
 - Implement wind grid cells.

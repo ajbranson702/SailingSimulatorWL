@@ -19,6 +19,7 @@ Phase 3 is underway:
 - Adjustable simulation speed
 - Boat track rendering
 - Basic finish-line and collision event detection
+- Course leg progress with mark rounding and gated finish detection
 - Basic domain tests
 
 ## Controls

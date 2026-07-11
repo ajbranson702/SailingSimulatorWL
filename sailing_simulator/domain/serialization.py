@@ -149,6 +149,9 @@ def boat_to_dict(boat: Boat) -> dict[str, Any]:
         "control_mode": boat.control_mode.value,
         "target_leg_index": boat.target_leg_index,
         "track": [vector_to_dict(point) for point in boat.track],
+        "has_started": boat.has_started,
+        "is_finished": boat.is_finished,
+        "finish_time_seconds": boat.finish_time_seconds,
     }
 
 
@@ -161,6 +164,9 @@ def boat_from_dict(data: dict[str, Any]) -> Boat:
         control_mode=BoatControlMode(data.get("control_mode", BoatControlMode.AI.value)),
         target_leg_index=int(data.get("target_leg_index", 0)),
         track=[vector_from_dict(point, Vector2(0.0, 0.0)) for point in data.get("track", [])],
+        has_started=bool(data.get("has_started", False)),
+        is_finished=bool(data.get("is_finished", False)),
+        finish_time_seconds=data.get("finish_time_seconds"),
     )
 
 

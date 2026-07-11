@@ -1,4 +1,4 @@
-from sailing_simulator.domain.models import BoatControlMode, RaceEventType, Vector2, default_scenario
+from sailing_simulator.domain.models import BoatControlMode, MarkType, RaceEventType, Vector2, default_scenario
 from sailing_simulator.domain.simulation import (
     detect_race_events,
     step_scenario,
@@ -54,7 +54,7 @@ def test_tack_turns_boat_roughly_onto_opposite_tack_and_slows():
     assert boat.speed_knots == 3.25
 
 
-def test_finish_crossing_creates_event_once():
+def test_line_crossing_starts_before_it_can_finish():
     scenario = default_scenario()
     boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
     previous = Vector2(450.0, 710.0)
@@ -63,8 +63,37 @@ def test_finish_crossing_creates_event_once():
     detect_race_events(scenario, {boat.name: previous})
     detect_race_events(scenario, {boat.name: previous})
 
+    assert boat.has_started
+    assert boat.name not in scenario.race_state.finished_boats
+    assert [event.event_type for event in scenario.race_state.events].count(RaceEventType.START_CROSSED) == 1
+
+
+def test_mark_rounding_advances_target_leg():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    windward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.WINDWARD)
+    boat.position = windward.position
+
+    detect_race_events(scenario, {boat.name: boat.position})
+
+    assert boat.target_leg_index == 1
+    assert any(event.event_type == RaceEventType.MARK_ROUNDED for event in scenario.race_state.events)
+
+
+def test_finish_crossing_only_counts_after_required_marks():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    boat.target_leg_index = 1
+    previous = Vector2(450.0, 690.0)
+    boat.position = Vector2(450.0, 710.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.is_finished
     assert boat.name in scenario.race_state.finished_boats
-    assert [event.event_type for event in scenario.race_state.events].count(RaceEventType.FINISH_CROSSED) == 1
+    assert any(event.event_type == RaceEventType.FINISH_CROSSED for event in scenario.race_state.events)
 
 
 def test_boat_collision_creates_event():
