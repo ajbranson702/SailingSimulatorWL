@@ -14,9 +14,12 @@ MARK_COLLISION_RADIUS = 22.0
 
 
 def step_scenario(scenario: Scenario, elapsed_seconds: float) -> None:
+    from sailing_simulator.domain.wind import update_wind_field
+
     previous_positions = {boat.name: boat.position for boat in scenario.boats}
     scenario.race_state.events = []
     scenario.race_state.elapsed_seconds += elapsed_seconds
+    update_wind_field(scenario)
     for boat in scenario.boats:
         if boat.control_mode == BoatControlMode.AI:
             continue
@@ -25,10 +28,13 @@ def step_scenario(scenario: Scenario, elapsed_seconds: float) -> None:
 
 
 def step_boat(boat: Boat, scenario: Scenario, elapsed_seconds: float) -> None:
+    from sailing_simulator.domain.wind import wind_at
+
+    wind_direction, wind_speed = wind_at(scenario, boat.position)
     target_speed = target_boat_speed(
         scenario.polar,
-        scenario.wind_model.base_speed_knots,
-        true_wind_angle(boat.heading_degrees, scenario.wind_model.base_direction_degrees),
+        wind_speed,
+        true_wind_angle(boat.heading_degrees, wind_direction),
     )
     acceleration = 1.3
     speed_delta = target_speed - boat.speed_knots

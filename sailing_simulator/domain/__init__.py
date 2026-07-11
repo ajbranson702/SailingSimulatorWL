@@ -14,6 +14,7 @@ from sailing_simulator.domain.models import (
     TerrainObject,
     TerrainType,
     Vector2,
+    WindCell,
     WindField,
     WindModel,
     WindMode,
@@ -37,6 +38,7 @@ from sailing_simulator.domain.simulation import (
     true_wind_angle,
 )
 from sailing_simulator.domain.validation import validate_course
+from sailing_simulator.domain.wind import direction_at, update_wind_field, wind_at
 
 __all__ = [
     "Boat",
@@ -54,6 +56,7 @@ __all__ = [
     "TerrainObject",
     "TerrainType",
     "Vector2",
+    "WindCell",
     "WindField",
     "WindModel",
     "WindMode",
@@ -76,4 +79,7 @@ __all__ = [
     "total_targets_for",
     "valid_mark_types_for",
     "validate_course",
+    "direction_at",
+    "update_wind_field",
+    "wind_at",
 ]

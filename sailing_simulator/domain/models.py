@@ -108,7 +108,7 @@ class WindModel:
     base_speed_knots: float = 10.0
     oscillation_amplitude_degrees: float = 10.0
     oscillation_period_seconds: float = 180.0
-    persistent_shift_degrees_per_minute: float = 0.0
+    persistent_shift_degrees_per_minute: float = 5.0
     gust_percent: float = 0.0
 
 
@@ -117,6 +117,16 @@ class WindField:
     columns: int = 9
     rows: int = 9
     cell_size: float = 100.0
+    cells: list[WindCell] = field(default_factory=list)
+
+
+@dataclass
+class WindCell:
+    column: int
+    row: int
+    center: Vector2
+    direction_degrees: float
+    speed_knots: float
 
 
 @dataclass

@@ -36,6 +36,7 @@ from sailing_simulator.domain.simulation import (
     true_wind_angle,
 )
 from sailing_simulator.domain.validation import validate_course
+from sailing_simulator.domain.wind import update_wind_field, wind_at
 from sailing_simulator.ui.course_canvas import CourseCanvas
 
 
@@ -52,7 +53,7 @@ class MainWindow(QMainWindow):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setCentralWidget(self._build_content())
         self._refresh_controls_from_scenario()
-        self.statusBar().showMessage("Phase 3 sailing controls ready")
+        self.statusBar().showMessage("Phase 5 wind scenario controls ready")
 
     def _build_content(self) -> QWidget:
         root = QWidget()
@@ -109,6 +110,34 @@ class MainWindow(QMainWindow):
         self.wind_strength.setValue(self.scenario.wind_model.base_speed_knots)
         self.wind_strength.valueChanged.connect(self._update_scenario_from_controls)
         form.addRow("Base wind", self.wind_strength)
+
+        self.wind_direction = QDoubleSpinBox()
+        self.wind_direction.setRange(0.0, 359.0)
+        self.wind_direction.setSuffix(" deg")
+        self.wind_direction.setValue(self.scenario.wind_model.base_direction_degrees)
+        self.wind_direction.valueChanged.connect(self._update_scenario_from_controls)
+        form.addRow("Wind from", self.wind_direction)
+
+        self.oscillation_amplitude = QDoubleSpinBox()
+        self.oscillation_amplitude.setRange(0.0, 45.0)
+        self.oscillation_amplitude.setSuffix(" deg")
+        self.oscillation_amplitude.setValue(self.scenario.wind_model.oscillation_amplitude_degrees)
+        self.oscillation_amplitude.valueChanged.connect(self._update_scenario_from_controls)
+        form.addRow("Oscillation", self.oscillation_amplitude)
+
+        self.oscillation_period = QDoubleSpinBox()
+        self.oscillation_period.setRange(10.0, 900.0)
+        self.oscillation_period.setSuffix(" s")
+        self.oscillation_period.setValue(self.scenario.wind_model.oscillation_period_seconds)
+        self.oscillation_period.valueChanged.connect(self._update_scenario_from_controls)
+        form.addRow("Osc period", self.oscillation_period)
+
+        self.persistent_shift = QDoubleSpinBox()
+        self.persistent_shift.setRange(0.0, 30.0)
+        self.persistent_shift.setSuffix(" deg/min")
+        self.persistent_shift.setValue(self.scenario.wind_model.persistent_shift_degrees_per_minute)
+        self.persistent_shift.valueChanged.connect(self._update_scenario_from_controls)
+        form.addRow("Shift rate", self.persistent_shift)
 
         self.gust_percent = QDoubleSpinBox()
         self.gust_percent.setRange(0.0, 100.0)
@@ -206,7 +235,7 @@ class MainWindow(QMainWindow):
         if user_boat is None:
             return False
 
-        wind_from = self.scenario.wind_model.base_direction_degrees
+        wind_from, _ = wind_at(self.scenario, user_boat.position)
         if key == Qt.Key.Key_Up:
             steer_toward_wind(user_boat, wind_from, 5.0)
         elif key == Qt.Key.Key_Down:
@@ -319,8 +348,14 @@ class MainWindow(QMainWindow):
         self.scenario.course.race_format = self._selected_race_format()
         self.scenario.wind_model.mode = self._selected_wind_mode()
         self.scenario.wind_model.base_speed_knots = self.wind_strength.value()
+        self.scenario.wind_model.base_direction_degrees = self.wind_direction.value()
+        self.scenario.wind_model.oscillation_amplitude_degrees = self.oscillation_amplitude.value()
+        self.scenario.wind_model.oscillation_period_seconds = self.oscillation_period.value()
+        self.scenario.wind_model.persistent_shift_degrees_per_minute = self.persistent_shift.value()
         self.scenario.wind_model.gust_percent = self.gust_percent.value()
         self.scenario.race_state.time_scale = self.time_scale.value()
+        update_wind_field(self.scenario)
+        self.canvas.update()
 
     def _refresh_controls_from_scenario(self) -> None:
         self.format_combo.blockSignals(True)
@@ -331,6 +366,10 @@ class MainWindow(QMainWindow):
         self.boat_count.blockSignals(False)
         self.wind_mode.setCurrentIndex(self.wind_mode.findData(self.scenario.wind_model.mode.value))
         self.wind_strength.setValue(self.scenario.wind_model.base_speed_knots)
+        self.wind_direction.setValue(self.scenario.wind_model.base_direction_degrees)
+        self.oscillation_amplitude.setValue(self.scenario.wind_model.oscillation_amplitude_degrees)
+        self.oscillation_period.setValue(self.scenario.wind_model.oscillation_period_seconds)
+        self.persistent_shift.setValue(self.scenario.wind_model.persistent_shift_degrees_per_minute)
         self.gust_percent.setValue(self.scenario.wind_model.gust_percent)
         self.time_scale.setValue(self.scenario.race_state.time_scale)
         self._refresh_course_controls()
@@ -346,12 +385,14 @@ class MainWindow(QMainWindow):
             self.status.setText("No boats in scenario")
             return
 
-        twa = true_wind_angle(user_boat.heading_degrees, self.scenario.wind_model.base_direction_degrees)
+        local_wind_direction, local_wind_speed = wind_at(self.scenario, user_boat.position)
+        twa = true_wind_angle(user_boat.heading_degrees, local_wind_direction)
         progress_text = self._boat_progress_text(user_boat)
         self.status.setText(
             f"Controlled boat: {user_boat.name}\n"
             f"Heading: {user_boat.heading_degrees:.0f} deg\n"
             f"Speed: {user_boat.speed_knots:.1f} kt\n"
+            f"Wind: {local_wind_direction:.0f} deg / {local_wind_speed:.1f} kt\n"
             f"TWA: {twa:.0f} deg\n"
             f"Sim speed: {self.scenario.race_state.time_scale:.0f}x\n"
             f"Elapsed: {self.scenario.race_state.elapsed_seconds:.1f} s\n"

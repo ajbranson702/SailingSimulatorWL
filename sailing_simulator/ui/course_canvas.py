@@ -8,6 +8,7 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QWidget
 
 from sailing_simulator.domain.models import BoatControlMode, Scenario, Vector2
+from sailing_simulator.domain.wind import update_wind_field, wind_at
 
 
 @dataclass(frozen=True)
@@ -89,17 +90,21 @@ class CourseCanvas(QWidget):
 
     def _draw_wind_grid(self, painter: QPainter, rect: QRectF) -> None:
         field = self.scenario.wind_field
-        x_step = rect.width() / max(field.columns, 1)
-        y_step = rect.height() / max(field.rows, 1)
+        if len(field.cells) != field.columns * field.rows:
+            update_wind_field(self.scenario)
 
-        painter.setPen(QPen(QColor("#3f8ca7"), 1))
-        for row in range(field.rows):
-            for column in range(field.columns):
-                x = rect.left() + column * x_step + x_step * 0.5
-                y = rect.top() + row * y_step + y_step * 0.5
-                painter.drawLine(QPointF(x, y - 14), QPointF(x, y + 14))
-                painter.drawLine(QPointF(x, y + 14), QPointF(x - 5, y + 7))
-                painter.drawLine(QPointF(x, y + 14), QPointF(x + 5, y + 7))
+        for cell in field.cells:
+            center = self._to_screen(cell.center, rect)
+            length = 9.0 + min(cell.speed_knots, 25.0) * 0.7
+            radians = math.radians(cell.direction_degrees + 180.0)
+            end = QPointF(center.x() + math.sin(radians) * length, center.y() - math.cos(radians) * length)
+            start = QPointF(center.x() - math.sin(radians) * length * 0.45, center.y() + math.cos(radians) * length * 0.45)
+            alpha = max(75, min(210, int(70 + cell.speed_knots * 8)))
+            color = QColor("#2d8aa8")
+            color.setAlpha(alpha)
+            painter.setPen(QPen(color, 1.4))
+            painter.drawLine(start, end)
+            self._draw_arrow_head(painter, end, radians, color)
 
     def _draw_course_objects(self, painter: QPainter, rect: QRectF) -> None:
         start = self.scenario.course.start_line
@@ -141,7 +146,7 @@ class CourseCanvas(QWidget):
             painter.save()
             painter.translate(center)
             painter.rotate(boat.heading_degrees)
-            self._draw_dinghy(painter, color, self._sail_side_for(boat.heading_degrees))
+            self._draw_dinghy(painter, color, self._sail_side_for_boat(boat))
             painter.restore()
 
             painter.setPen(QPen(QColor("#1f2933"), 1))
@@ -188,6 +193,23 @@ class CourseCanvas(QWidget):
         wind_from = self.scenario.wind_model.base_direction_degrees
         relative_wind = self._normalize_degrees(wind_from - heading_degrees)
         return -1 if relative_wind >= 0 else 1
+
+    def _sail_side_for_boat(self, boat) -> int:
+        wind_from, _ = wind_at(self.scenario, boat.position)
+        relative_wind = self._normalize_degrees(wind_from - boat.heading_degrees)
+        return -1 if relative_wind >= 0 else 1
+
+    def _draw_arrow_head(self, painter: QPainter, end: QPointF, radians: float, color: QColor) -> None:
+        left = QPointF(
+            end.x() - math.sin(radians + 0.55) * 7.0,
+            end.y() + math.cos(radians + 0.55) * 7.0,
+        )
+        right = QPointF(
+            end.x() - math.sin(radians - 0.55) * 7.0,
+            end.y() + math.cos(radians - 0.55) * 7.0,
+        )
+        painter.setBrush(color)
+        painter.drawPolygon(QPolygonF([end, left, right]))
 
     def _normalize_degrees(self, degrees: float) -> float:
         return math.remainder(degrees, 360.0)

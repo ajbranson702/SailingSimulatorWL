@@ -4,7 +4,7 @@ Windows desktop simulator for experimenting with windward-leeward sailing race s
 
 ## Current Status
 
-Phase 3 is underway:
+Phase 5 is underway:
 
 - PySide6 app shell
 - Single simulator screen
@@ -20,6 +20,9 @@ Phase 3 is underway:
 - Boat track rendering
 - Basic finish-line and collision event detection
 - Course leg progress with mark rounding and gated finish detection
+- Wind grid generated from current wind scenario
+- Static, oscillating, persistent-shift, combined-shift, and gusty wind modes
+- Boat physics and sail display use local wind
 - Basic domain tests
 
 ## Controls

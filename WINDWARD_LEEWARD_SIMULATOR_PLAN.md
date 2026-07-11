@@ -313,6 +313,8 @@ Status: initial race-progress implementation complete.
 
 Deliverable: user can experiment with changing wind and see it on the course.
 
+Status: initial wind engine and visualization implementation complete.
+
 ### Phase 6: Computer-Controlled Boats
 
 - Add fleet-size setting.
