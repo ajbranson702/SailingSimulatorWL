@@ -81,6 +81,20 @@ def test_mark_rounding_advances_target_leg():
     assert any(event.event_type == RaceEventType.MARK_ROUNDED for event in scenario.race_state.events)
 
 
+def test_mark_rounding_advances_when_boat_passes_through_mark_radius_between_ticks():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    windward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.WINDWARD)
+    previous = Vector2(windward.position.x - 80.0, windward.position.y)
+    boat.position = Vector2(windward.position.x + 80.0, windward.position.y)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.target_leg_index == 1
+    assert any(event.event_type == RaceEventType.MARK_ROUNDED for event in scenario.race_state.events)
+
+
 def test_finish_crossing_only_counts_after_required_marks():
     scenario = default_scenario()
     boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)

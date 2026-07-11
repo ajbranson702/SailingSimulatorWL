@@ -112,7 +112,7 @@ def reset_boats_to_start(scenario: Scenario) -> None:
 
 def detect_race_events(scenario: Scenario, previous_positions: dict[str, Vector2]) -> None:
     detect_start_or_finish_crossings(scenario, previous_positions)
-    detect_mark_roundings(scenario)
+    detect_mark_roundings(scenario, previous_positions)
     detect_boat_collisions(scenario)
     detect_mark_collisions(scenario)
 
@@ -142,7 +142,7 @@ def detect_start_or_finish_crossings(scenario: Scenario, previous_positions: dic
                 )
 
 
-def detect_mark_roundings(scenario: Scenario) -> None:
+def detect_mark_roundings(scenario: Scenario, previous_positions: dict[str, Vector2]) -> None:
     for boat in scenario.boats:
         if not boat.has_started or boat.is_finished:
             continue
@@ -151,7 +151,8 @@ def detect_mark_roundings(scenario: Scenario) -> None:
         if target is None:
             continue
 
-        if distance(boat.position, target.position) <= MARK_COLLISION_RADIUS:
+        previous = previous_positions.get(boat.name, boat.position)
+        if distance_from_segment(target.position, previous, boat.position) <= MARK_COLLISION_RADIUS:
             boat.target_leg_index += 1
             add_event(
                 scenario,
@@ -229,6 +230,19 @@ def clamp_to_course(position: Vector2, width: float, height: float) -> Vector2:
 
 def distance(first: Vector2, second: Vector2) -> float:
     return math.hypot(first.x - second.x, first.y - second.y)
+
+
+def distance_from_segment(point: Vector2, segment_start: Vector2, segment_end: Vector2) -> float:
+    dx = segment_end.x - segment_start.x
+    dy = segment_end.y - segment_start.y
+    length_squared = dx * dx + dy * dy
+    if length_squared == 0:
+        return distance(point, segment_start)
+
+    projection = ((point.x - segment_start.x) * dx + (point.y - segment_start.y) * dy) / length_squared
+    projection = max(0.0, min(1.0, projection))
+    closest = Vector2(segment_start.x + projection * dx, segment_start.y + projection * dy)
+    return distance(point, closest)
 
 
 def segments_intersect(first_start: Vector2, first_end: Vector2, second_start: Vector2, second_end: Vector2) -> bool:
