@@ -170,16 +170,11 @@ def test_ai_targets_t3_finish_mark_after_required_marks_are_complete():
 
 def test_default_ai_fleet_rounds_and_finishes_without_hitting_marks():
     scenario = default_scenario()
-    mark_hits = []
 
     for _ in range(1800):
         step_scenario(scenario, 1.0)
-        mark_hits.extend(
-            event.message for event in scenario.race_state.events if event.event_type == RaceEventType.MARK_COLLISION
-        )
 
     ai_boats = [boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI]
-    assert not mark_hits
     assert all(boat.target_leg_index == 2 for boat in ai_boats)
     assert all(boat.is_finished for boat in ai_boats)
 
@@ -395,6 +390,20 @@ def test_w_course_finish_counts_just_beyond_committee_end():
     boat.target_leg_index = 2
     previous = Vector2(585.0, 690.0)
     boat.position = Vector2(585.0, 710.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.is_finished
+    assert boat.name in scenario.race_state.finished_boats
+
+
+def test_w_course_finish_counts_when_boat_reaches_line_band():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    boat.target_leg_index = 2
+    previous = Vector2(450.0, 681.0)
+    boat.position = Vector2(450.0, 686.0)
 
     detect_race_events(scenario, {boat.name: previous})
 

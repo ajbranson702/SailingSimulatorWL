@@ -24,14 +24,16 @@ MAX_TRACK_POINTS = 300
 BOAT_COLLISION_RADIUS = 28.0
 MARK_COLLISION_RADIUS = 22.0
 START_FINISH_LINE_EXTENSION = 45.0
+START_FINISH_LINE_TOUCH_RADIUS = 18.0
 MARK_ROUNDING_GATE_HALF_WIDTH = 140.0
 MARK_ROUNDING_ADVANCE_DISTANCE = 4.0
+MARK_ROUNDING_COMPLETION_MAX_ADVANCE = 180.0
 AI_MARK_ROUNDING_OFFSET = 112.0
-AI_MARK_ROUNDING_ADVANCE = 28.0
+AI_MARK_APPROACH_DISTANCE = 95.0
+AI_MARK_EXIT_DISTANCE = 65.0
+AI_MARK_SWITCH_DISTANCE = 35.0
 AI_LEEWARD_ROUNDING_OFFSET = 135.0
 AI_LEEWARD_ROUNDING_ADVANCE = 92.0
-AI_LEEWARD_EXIT_SWITCH_ADVANCE = 18.0
-AI_LEEWARD_EXIT_SWITCH_OFFSET = 50.0
 AI_CLOSE_TARGET_RADIUS = 85.0
 AI_BOUNDARY_MARGIN = 75.0
 AI_MARK_AVOIDANCE_LOOKAHEAD = 140.0
@@ -143,33 +145,64 @@ def ai_steering_target_position(boat: Boat, scenario: Scenario) -> Vector2:
     if incoming_unit is None or gate_unit is None:
         return target.position
 
-    side = rounding_boat_side_unit(scenario, target_index)
-    if side is None:
+    incoming_unit = incoming_leg_unit_for(scenario, target_index)
+    exit_side = rounding_boat_side_unit(scenario, target_index)
+    if incoming_unit is None or exit_side is None:
         return target.position
     if target.mark_type == MarkType.LEEWARD:
-        return ai_leeward_rounding_target(boat, target, gate_unit, side)
+        return ai_leeward_rounding_target(boat, target, incoming_unit, gate_unit, exit_side)
 
-    return Vector2(
-        target.position.x + gate_unit.x * AI_MARK_ROUNDING_ADVANCE + side.x * AI_MARK_ROUNDING_OFFSET,
-        target.position.y + gate_unit.y * AI_MARK_ROUNDING_ADVANCE + side.y * AI_MARK_ROUNDING_OFFSET,
-    )
+    return ai_standard_mark_rounding_target(boat, target, incoming_unit, gate_unit, exit_side)
 
 
-def ai_leeward_rounding_target(boat: Boat, target: Mark, gate_unit: Vector2, side: Vector2) -> Vector2:
+def ai_standard_mark_rounding_target(
+    boat: Boat,
+    target: Mark,
+    incoming_unit: Vector2,
+    gate_unit: Vector2,
+    exit_side: Vector2,
+) -> Vector2:
+    approach_side = port_rounding_boat_side(incoming_unit)
     target_to_boat = Vector2(boat.position.x - target.position.x, boat.position.y - target.position.y)
-    if (
-        dot(target_to_boat, gate_unit) > -AI_LEEWARD_EXIT_SWITCH_ADVANCE
-        or dot(target_to_boat, side) < AI_LEEWARD_EXIT_SWITCH_OFFSET
-    ):
+    if should_sail_to_mark_approach(target_to_boat, incoming_unit):
         return Vector2(
-            target.position.x - gate_unit.x * AI_LEEWARD_ROUNDING_ADVANCE + side.x * AI_LEEWARD_ROUNDING_OFFSET,
-            target.position.y - gate_unit.y * AI_LEEWARD_ROUNDING_ADVANCE + side.y * AI_LEEWARD_ROUNDING_OFFSET,
+            target.position.x - incoming_unit.x * AI_MARK_APPROACH_DISTANCE + approach_side.x * AI_MARK_ROUNDING_OFFSET,
+            target.position.y - incoming_unit.y * AI_MARK_APPROACH_DISTANCE + approach_side.y * AI_MARK_ROUNDING_OFFSET,
         )
 
     return Vector2(
-        target.position.x + gate_unit.x * AI_MARK_ROUNDING_ADVANCE + side.x * AI_LEEWARD_ROUNDING_OFFSET,
-        target.position.y + gate_unit.y * AI_MARK_ROUNDING_ADVANCE + side.y * AI_LEEWARD_ROUNDING_OFFSET,
+        target.position.x + gate_unit.x * AI_MARK_EXIT_DISTANCE + exit_side.x * AI_MARK_ROUNDING_OFFSET,
+        target.position.y + gate_unit.y * AI_MARK_EXIT_DISTANCE + exit_side.y * AI_MARK_ROUNDING_OFFSET,
     )
+
+
+def ai_leeward_rounding_target(
+    boat: Boat,
+    target: Mark,
+    incoming_unit: Vector2,
+    gate_unit: Vector2,
+    exit_side: Vector2,
+) -> Vector2:
+    approach_side = port_rounding_boat_side(incoming_unit)
+    target_to_boat = Vector2(boat.position.x - target.position.x, boat.position.y - target.position.y)
+    if should_sail_to_mark_approach(target_to_boat, incoming_unit):
+        return Vector2(
+            target.position.x - incoming_unit.x * AI_LEEWARD_ROUNDING_ADVANCE + approach_side.x * AI_LEEWARD_ROUNDING_OFFSET,
+            target.position.y - incoming_unit.y * AI_LEEWARD_ROUNDING_ADVANCE + approach_side.y * AI_LEEWARD_ROUNDING_OFFSET,
+        )
+
+    return Vector2(
+        target.position.x + gate_unit.x * AI_MARK_EXIT_DISTANCE + exit_side.x * AI_LEEWARD_ROUNDING_OFFSET,
+        target.position.y + gate_unit.y * AI_MARK_EXIT_DISTANCE + exit_side.y * AI_LEEWARD_ROUNDING_OFFSET,
+    )
+
+
+def should_sail_to_mark_approach(
+    target_to_boat: Vector2,
+    incoming_unit: Vector2,
+) -> bool:
+    approach_progress = dot(target_to_boat, incoming_unit)
+    return approach_progress < -AI_MARK_SWITCH_DISTANCE
 
 
 def ai_finish_target_position(scenario: Scenario) -> Vector2:
@@ -529,6 +562,8 @@ def detect_mark_roundings(scenario: Scenario, previous_positions: dict[str, Vect
 def detect_boat_collisions(scenario: Scenario) -> None:
     colliding_boats: set[str] = set()
     for first, second in itertools.combinations(scenario.boats, 2):
+        if first.is_finished or second.is_finished:
+            continue
         if distance(first.position, second.position) <= BOAT_COLLISION_RADIUS:
             if boats_are_actively_escaping(first, second, scenario):
                 continue
@@ -664,7 +699,10 @@ def mark_rounding_parameter(
 
     start_advance = dot(Vector2(segment_start.x - target.position.x, segment_start.y - target.position.y), gate_unit)
     end_advance = dot(Vector2(segment_end.x - target.position.x, segment_end.y - target.position.y), gate_unit)
-    if start_advance >= MARK_ROUNDING_ADVANCE_DISTANCE or end_advance < MARK_ROUNDING_ADVANCE_DISTANCE:
+    end_offset = Vector2(segment_end.x - target.position.x, segment_end.y - target.position.y)
+    if start_advance >= MARK_ROUNDING_ADVANCE_DISTANCE:
+        return completed_mark_rounding_parameter(end_offset, side_unit, gate_unit)
+    if end_advance < MARK_ROUNDING_ADVANCE_DISTANCE:
         return None
 
     advance_delta = end_advance - start_advance
@@ -680,6 +718,17 @@ def mark_rounding_parameter(
     if dot(target_to_crossing, side_unit) < 0.0 or abs(cross(target_to_crossing, gate_unit)) > MARK_ROUNDING_GATE_HALF_WIDTH:
         return None
     return parameter
+
+
+def completed_mark_rounding_parameter(target_to_boat: Vector2, side_unit: Vector2, gate_unit: Vector2) -> float | None:
+    if (
+        dot(target_to_boat, gate_unit) >= MARK_ROUNDING_ADVANCE_DISTANCE
+        and dot(target_to_boat, gate_unit) <= MARK_ROUNDING_COMPLETION_MAX_ADVANCE
+        and dot(target_to_boat, side_unit) >= 0.0
+        and abs(cross(target_to_boat, gate_unit)) <= MARK_ROUNDING_GATE_HALF_WIDTH
+    ):
+        return 1.0
+    return None
 
 
 def incoming_leg_unit_for(scenario: Scenario, target_leg_index: int) -> Vector2 | None:
@@ -773,7 +822,12 @@ def start_line_center(scenario: Scenario) -> Vector2:
 
 def start_finish_line_crossing_parameter(scenario: Scenario, segment_start: Vector2, segment_end: Vector2) -> float | None:
     line_start, line_end = extended_start_finish_line(scenario)
-    return segment_intersection_parameter(segment_start, segment_end, line_start, line_end)
+    crossing = segment_intersection_parameter(segment_start, segment_end, line_start, line_end)
+    if crossing is not None:
+        return crossing
+    if distance_from_segment(segment_end, line_start, line_end) <= START_FINISH_LINE_TOUCH_RADIUS:
+        return 1.0
+    return None
 
 
 def extended_start_finish_line(scenario: Scenario) -> tuple[Vector2, Vector2]:
