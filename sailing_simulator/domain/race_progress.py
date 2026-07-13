@@ -5,11 +5,11 @@ from sailing_simulator.domain.models import Boat, Course, Mark, MarkType, RaceFo
 
 def mark_sequence_for(race_format: RaceFormat) -> list[MarkType]:
     if race_format == RaceFormat.W2:
-        return [MarkType.WINDWARD]
+        return [MarkType.WINDWARD, MarkType.LEEWARD]
     if race_format == RaceFormat.T3:
         return [MarkType.WINDWARD, MarkType.GYBE]
     if race_format == RaceFormat.W4:
-        return [MarkType.WINDWARD, MarkType.LEEWARD, MarkType.WINDWARD]
+        return [MarkType.WINDWARD, MarkType.LEEWARD, MarkType.WINDWARD, MarkType.LEEWARD]
     if race_format == RaceFormat.W6:
         return [
             MarkType.WINDWARD,
@@ -17,6 +17,7 @@ def mark_sequence_for(race_format: RaceFormat) -> list[MarkType]:
             MarkType.WINDWARD,
             MarkType.LEEWARD,
             MarkType.WINDWARD,
+            MarkType.LEEWARD,
         ]
     raise ValueError(f"Unsupported race format: {race_format}")
 
@@ -67,10 +68,6 @@ def finish_position_for(course: Course) -> Vector2:
     explicit_finish = next((mark.position for mark in course.marks if mark.mark_type == MarkType.FINISH), None)
     if explicit_finish is not None:
         return explicit_finish
-
-    leeward = next((mark.position for mark in course.marks if mark.mark_type == MarkType.LEEWARD), None)
-    if leeward is not None:
-        return leeward
 
     start = course.start_line
     return Vector2(

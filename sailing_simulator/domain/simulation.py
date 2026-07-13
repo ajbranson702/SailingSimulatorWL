@@ -22,10 +22,14 @@ COURSE_UNITS_PER_NAUTICAL_MILE = 1800.0
 MAX_TRACK_POINTS = 300
 BOAT_COLLISION_RADIUS = 28.0
 MARK_COLLISION_RADIUS = 22.0
-MARK_ROUNDING_GATE_HALF_WIDTH = 85.0
+MARK_ROUNDING_GATE_HALF_WIDTH = 140.0
 MARK_ROUNDING_ADVANCE_DISTANCE = 4.0
 AI_MARK_ROUNDING_OFFSET = 48.0
 AI_MARK_ROUNDING_ADVANCE = 18.0
+AI_LEEWARD_ROUNDING_OFFSET = 72.0
+AI_LEEWARD_ROUNDING_ADVANCE = 64.0
+AI_LEEWARD_EXIT_SWITCH_ADVANCE = 18.0
+AI_LEEWARD_EXIT_SWITCH_OFFSET = 50.0
 AI_CLOSE_TARGET_RADIUS = 85.0
 AI_BOUNDARY_MARGIN = 75.0
 AI_MARK_AVOIDANCE_LOOKAHEAD = 140.0
@@ -137,9 +141,29 @@ def ai_steering_target_position(boat: Boat, scenario: Scenario) -> Vector2:
         return target.position
 
     side = port_rounding_boat_side(incoming_unit)
+    if target.mark_type == MarkType.LEEWARD:
+        return ai_leeward_rounding_target(boat, target, gate_unit, side)
+
     return Vector2(
         target.position.x + gate_unit.x * AI_MARK_ROUNDING_ADVANCE + side.x * AI_MARK_ROUNDING_OFFSET,
         target.position.y + gate_unit.y * AI_MARK_ROUNDING_ADVANCE + side.y * AI_MARK_ROUNDING_OFFSET,
+    )
+
+
+def ai_leeward_rounding_target(boat: Boat, target: Mark, gate_unit: Vector2, side: Vector2) -> Vector2:
+    target_to_boat = Vector2(boat.position.x - target.position.x, boat.position.y - target.position.y)
+    if (
+        dot(target_to_boat, gate_unit) > -AI_LEEWARD_EXIT_SWITCH_ADVANCE
+        or dot(target_to_boat, side) < AI_LEEWARD_EXIT_SWITCH_OFFSET
+    ):
+        return Vector2(
+            target.position.x - gate_unit.x * AI_LEEWARD_ROUNDING_ADVANCE + side.x * AI_LEEWARD_ROUNDING_OFFSET,
+            target.position.y - gate_unit.y * AI_LEEWARD_ROUNDING_ADVANCE + side.y * AI_LEEWARD_ROUNDING_OFFSET,
+        )
+
+    return Vector2(
+        target.position.x + gate_unit.x * AI_MARK_ROUNDING_ADVANCE + side.x * AI_LEEWARD_ROUNDING_OFFSET,
+        target.position.y + gate_unit.y * AI_MARK_ROUNDING_ADVANCE + side.y * AI_LEEWARD_ROUNDING_OFFSET,
     )
 
 
