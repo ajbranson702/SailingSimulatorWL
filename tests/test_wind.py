@@ -30,6 +30,16 @@ def test_persistent_left_wind_shifts_left_over_time():
     assert direction_at(scenario.wind_model, 120.0) == 350.0
 
 
+def test_persistent_left_with_oscillation_shifts_left_and_oscillates():
+    scenario = default_scenario()
+    scenario.wind_model.mode = WindMode.PERSISTENT_LEFT_WITH_OSCILLATION
+    scenario.wind_model.persistent_shift_degrees_per_minute = 5.0
+    scenario.wind_model.oscillation_amplitude_degrees = 20.0
+    scenario.wind_model.oscillation_period_seconds = 120.0
+
+    assert direction_at(scenario.wind_model, 30.0) == 17.5
+
+
 def test_gusts_vary_wind_speed_by_position():
     scenario = default_scenario()
     scenario.wind_model.gust_percent = 20.0

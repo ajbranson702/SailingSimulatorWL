@@ -110,6 +110,26 @@ def test_finish_crossing_only_counts_after_required_marks():
     assert any(event.event_type == RaceEventType.FINISH_CROSSED for event in scenario.race_state.events)
 
 
+def test_progress_can_round_last_mark_and_finish_in_one_large_step():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    scenario.boats = [boat]
+    boat.has_started = True
+    windward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.WINDWARD)
+    previous = Vector2(windward.position.x, windward.position.y - 20.0)
+    boat.position = Vector2(windward.position.x, scenario.course.start_line.pin.y + 20.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.target_leg_index == 1
+    assert boat.is_finished
+    assert [event.event_type for event in scenario.race_state.events] == [
+        RaceEventType.MARK_ROUNDED,
+        RaceEventType.FINISH_CROSSED,
+        RaceEventType.MARK_COLLISION,
+    ]
+
+
 def test_boat_collision_creates_event():
     scenario = default_scenario()
     scenario.boats[0].position = Vector2(400.0, 400.0)

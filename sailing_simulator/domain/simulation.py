@@ -111,35 +111,65 @@ def reset_boats_to_start(scenario: Scenario) -> None:
 
 
 def detect_race_events(scenario: Scenario, previous_positions: dict[str, Vector2]) -> None:
-    detect_start_or_finish_crossings(scenario, previous_positions)
-    detect_mark_roundings(scenario, previous_positions)
+    detect_course_progress(scenario, previous_positions)
     detect_boat_collisions(scenario)
     detect_mark_collisions(scenario)
 
 
-def detect_start_or_finish_crossings(scenario: Scenario, previous_positions: dict[str, Vector2]) -> None:
+def detect_course_progress(scenario: Scenario, previous_positions: dict[str, Vector2]) -> None:
     start = scenario.course.start_line
     for boat in scenario.boats:
         if boat.is_finished:
             continue
 
         previous = previous_positions.get(boat.name)
-        if previous is None or previous == boat.position:
+        if previous is None:
             continue
 
-        if segments_intersect(previous, boat.position, start.pin, start.committee_boat):
+        segment_position = 0.0
+        for _ in range(total_targets_for(scenario.course) + 2):
             if not boat.has_started:
+                crossing = segment_intersection_parameter(previous, boat.position, start.pin, start.committee_boat)
+                if crossing is None or crossing + 1e-9 < segment_position:
+                    break
+
                 boat.has_started = True
+                segment_position = crossing
                 add_event(scenario, RaceEventType.START_CROSSED, f"{boat.name} started.")
-            elif boat.target_leg_index >= total_targets_for(scenario.course):
-                boat.is_finished = True
-                boat.finish_time_seconds = scenario.race_state.elapsed_seconds
-                scenario.race_state.finished_boats.add(boat.name)
+                continue
+
+            target = target_mark_for(scenario.course, boat.target_leg_index)
+            if target is not None:
+                rounding = mark_crossing_parameter(target.position, previous, boat.position, MARK_COLLISION_RADIUS)
+                if rounding is None or rounding + 1e-9 < segment_position:
+                    break
+
+                boat.target_leg_index += 1
+                segment_position = rounding
                 add_event(
                     scenario,
-                    RaceEventType.FINISH_CROSSED,
-                    f"{boat.name} finished in {boat.finish_time_seconds:.1f} seconds.",
+                    RaceEventType.MARK_ROUNDED,
+                    f"{boat.name} rounded {target.label}.",
                 )
+                continue
+
+            crossing = segment_intersection_parameter(previous, boat.position, start.pin, start.committee_boat)
+            if crossing is None or crossing + 1e-9 < segment_position:
+                break
+
+            boat.is_finished = True
+            boat.finish_time_seconds = scenario.race_state.elapsed_seconds
+            scenario.race_state.finished_boats.add(boat.name)
+            add_event(
+                scenario,
+                RaceEventType.FINISH_CROSSED,
+                f"{boat.name} finished in {boat.finish_time_seconds:.1f} seconds.",
+            )
+            break
+
+
+def detect_start_or_finish_crossings(scenario: Scenario, previous_positions: dict[str, Vector2]) -> None:
+    detect_course_progress(scenario, previous_positions)
 
 
 def detect_mark_roundings(scenario: Scenario, previous_positions: dict[str, Vector2]) -> None:
@@ -152,7 +182,7 @@ def detect_mark_roundings(scenario: Scenario, previous_positions: dict[str, Vect
             continue
 
         previous = previous_positions.get(boat.name, boat.position)
-        if distance_from_segment(target.position, previous, boat.position) <= MARK_COLLISION_RADIUS:
+        if mark_crossing_parameter(target.position, previous, boat.position, MARK_COLLISION_RADIUS) is not None:
             boat.target_leg_index += 1
             add_event(
                 scenario,
@@ -233,16 +263,77 @@ def distance(first: Vector2, second: Vector2) -> float:
 
 
 def distance_from_segment(point: Vector2, segment_start: Vector2, segment_end: Vector2) -> float:
+    crossing = mark_crossing_parameter(point, segment_start, segment_end, float("inf"))
+    if crossing is None:
+        return distance(point, segment_start)
+
+    closest = point_at_parameter(segment_start, segment_end, crossing)
+    return distance(point, closest)
+
+
+def mark_crossing_parameter(point: Vector2, segment_start: Vector2, segment_end: Vector2, radius: float) -> float | None:
     dx = segment_end.x - segment_start.x
     dy = segment_end.y - segment_start.y
     length_squared = dx * dx + dy * dy
     if length_squared == 0:
-        return distance(point, segment_start)
+        return 0.0 if distance(point, segment_start) <= radius else None
 
     projection = ((point.x - segment_start.x) * dx + (point.y - segment_start.y) * dy) / length_squared
     projection = max(0.0, min(1.0, projection))
-    closest = Vector2(segment_start.x + projection * dx, segment_start.y + projection * dy)
-    return distance(point, closest)
+    closest = point_at_parameter(segment_start, segment_end, projection)
+    if distance(point, closest) > radius:
+        return None
+    return projection
+
+
+def point_at_parameter(segment_start: Vector2, segment_end: Vector2, parameter: float) -> Vector2:
+    return Vector2(
+        segment_start.x + (segment_end.x - segment_start.x) * parameter,
+        segment_start.y + (segment_end.y - segment_start.y) * parameter,
+    )
+
+
+def segment_intersection_parameter(
+    first_start: Vector2,
+    first_end: Vector2,
+    second_start: Vector2,
+    second_end: Vector2,
+) -> float | None:
+    r = Vector2(first_end.x - first_start.x, first_end.y - first_start.y)
+    s = Vector2(second_end.x - second_start.x, second_end.y - second_start.y)
+    denominator = cross(r, s)
+    offset = Vector2(second_start.x - first_start.x, second_start.y - first_start.y)
+
+    if abs(denominator) < 1e-9:
+        if abs(cross(offset, r)) >= 1e-9:
+            return None
+
+        r_length_squared = r.x * r.x + r.y * r.y
+        if r_length_squared == 0:
+            return 0.0 if point_on_segment(first_start, second_start, second_end) else None
+
+        first_projection = dot(offset, r) / r_length_squared
+        second_offset = Vector2(second_end.x - first_start.x, second_end.y - first_start.y)
+        second_projection = dot(second_offset, r) / r_length_squared
+        overlap_start = max(0.0, min(first_projection, second_projection))
+        overlap_end = min(1.0, max(first_projection, second_projection))
+        if overlap_start <= overlap_end:
+            return overlap_start
+        return None
+
+    t = cross(offset, s) / denominator
+    u = cross(offset, r) / denominator
+    if -1e-9 <= t <= 1.0 + 1e-9 and -1e-9 <= u <= 1.0 + 1e-9:
+        return max(0.0, min(1.0, t))
+    return None
+
+
+def cross(first: Vector2, second: Vector2) -> float:
+    return first.x * second.y - first.y * second.x
+
+
+def dot(first: Vector2, second: Vector2) -> float:
+    return first.x * second.x + first.y * second.y
 
 
 def segments_intersect(first_start: Vector2, first_end: Vector2, second_start: Vector2, second_end: Vector2) -> bool:

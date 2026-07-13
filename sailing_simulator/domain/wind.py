@@ -35,6 +35,12 @@ def direction_at(model: WindModel, elapsed_seconds: float) -> float:
     elif model.mode == WindMode.PERSISTENT_WITH_OSCILLATION:
         direction += persistent_shift(model, elapsed_seconds)
         direction += oscillation(model, elapsed_seconds)
+    elif model.mode == WindMode.PERSISTENT_LEFT_WITH_OSCILLATION:
+        direction -= persistent_shift(model, elapsed_seconds)
+        direction += oscillation(model, elapsed_seconds)
+    elif model.mode == WindMode.PERSISTENT_RIGHT_WITH_OSCILLATION:
+        direction += persistent_shift(model, elapsed_seconds)
+        direction += oscillation(model, elapsed_seconds)
 
     return normalize_degrees(direction)
 

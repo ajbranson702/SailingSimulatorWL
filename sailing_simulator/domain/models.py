@@ -30,6 +30,8 @@ class WindMode(str, Enum):
     PERSISTENT_LEFT = "persistent_left"
     PERSISTENT_RIGHT = "persistent_right"
     PERSISTENT_WITH_OSCILLATION = "persistent_with_oscillation"
+    PERSISTENT_LEFT_WITH_OSCILLATION = "persistent_left_with_oscillation"
+    PERSISTENT_RIGHT_WITH_OSCILLATION = "persistent_right_with_oscillation"
 
 
 class BoatControlMode(str, Enum):
