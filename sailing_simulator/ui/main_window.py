@@ -409,8 +409,8 @@ class MainWindow(QMainWindow):
 
         while len(boats) < count:
             index = len(boats)
-            x = 420.0 + index * 42.0
-            y = 735.0 + (index % 2) * 16.0
+            x = 390.0 + index * 70.0
+            y = 790.0 + (index % 2) * 16.0
             boats.append(Boat(f"AI {index}", Vector2(x, y), 315.0))
 
         del boats[count:]

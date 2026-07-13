@@ -94,6 +94,8 @@ class Boat:
     ai_board: int | None = None
     ai_board_target_leg_index: int = -1
     ai_last_maneuver_seconds: float = -9999.0
+    ai_collision_escape_until_seconds: float = 0.0
+    ai_collision_escape_heading: float | None = None
 
 
 @dataclass
@@ -176,8 +178,8 @@ def default_scenario() -> Scenario:
 
     course = course_for_format(RaceFormat.W2)
     boats = [
-        Boat("USER", Vector2(420.0, 735.0), 315.0, control_mode=BoatControlMode.USER),
-        Boat("AI 1", Vector2(465.0, 745.0), 315.0),
-        Boat("AI 2", Vector2(510.0, 735.0), 315.0),
+        Boat("USER", Vector2(390.0, 790.0), 315.0, control_mode=BoatControlMode.USER),
+        Boat("AI 1", Vector2(475.0, 806.0), 315.0),
+        Boat("AI 2", Vector2(560.0, 790.0), 315.0),
     ]
     return Scenario(course=course, boats=boats)
