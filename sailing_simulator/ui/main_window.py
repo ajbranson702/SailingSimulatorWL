@@ -419,7 +419,8 @@ class MainWindow(QMainWindow):
         self._refresh_progress_table()
 
     def _refresh_progress_table(self) -> None:
-        headers = [target_label_for(self.scenario.course, index) for index in range(total_targets_for(self.scenario.course))]
+        headers = ["Start"]
+        headers.extend(target_label_for(self.scenario.course, index) for index in range(total_targets_for(self.scenario.course)))
         headers.append("Finish")
         self.progress_table.setColumnCount(len(headers))
         self.progress_table.setRowCount(len(self.scenario.boats))
@@ -428,8 +429,13 @@ class MainWindow(QMainWindow):
 
         finish_column = len(headers) - 1
         for row, boat in enumerate(self.scenario.boats):
-            for column in range(finish_column):
-                item = QTableWidgetItem("✓" if boat.target_leg_index > column or boat.is_finished else "")
+            start_item = QTableWidgetItem("✓" if boat.has_started or boat.is_finished else "")
+            start_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.progress_table.setItem(row, 0, start_item)
+
+            for column in range(1, finish_column):
+                target_index = column - 1
+                item = QTableWidgetItem("✓" if boat.target_leg_index > target_index or boat.is_finished else "")
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.progress_table.setItem(row, column, item)
 

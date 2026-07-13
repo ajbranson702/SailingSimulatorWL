@@ -7,7 +7,7 @@ def mark_sequence_for(race_format: RaceFormat) -> list[MarkType]:
     if race_format == RaceFormat.W2:
         return [MarkType.WINDWARD, MarkType.LEEWARD]
     if race_format == RaceFormat.T3:
-        return [MarkType.WINDWARD, MarkType.GYBE]
+        return [MarkType.WINDWARD, MarkType.GYBE, MarkType.LEEWARD]
     if race_format == RaceFormat.W4:
         return [MarkType.WINDWARD, MarkType.LEEWARD, MarkType.WINDWARD, MarkType.LEEWARD]
     if race_format == RaceFormat.W6:

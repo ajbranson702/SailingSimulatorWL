@@ -185,15 +185,25 @@ def test_ai_uses_staged_leeward_rounding_waypoints():
     assert ai_boat.ai_rounding_stage == 2
 
 
-def test_ai_targets_t3_finish_mark_after_required_marks_are_complete():
+def test_ai_targets_t3_leeward_mark_before_finish_line():
     scenario = default_scenario()
     scenario.course = course_for_format(RaceFormat.T3)
     ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
-    finish = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.FINISH)
+    leeward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
     ai_boat.has_started = True
     ai_boat.target_leg_index = 2
 
-    assert ai_target_position(ai_boat, scenario) == finish.position
+    assert ai_target_position(ai_boat, scenario) == leeward.position
+
+
+def test_ai_targets_t3_start_finish_line_after_required_marks_are_complete():
+    scenario = default_scenario()
+    scenario.course = course_for_format(RaceFormat.T3)
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    ai_boat.has_started = True
+    ai_boat.target_leg_index = 3
+
+    assert ai_target_position(ai_boat, scenario) == Vector2(555.0, 700.0)
 
 
 def test_default_ai_fleet_rounds_and_finishes_without_hitting_marks():
@@ -382,20 +392,53 @@ def test_w2_does_not_round_deep_leeward_when_crossing_mid_course_line():
     assert not any(event.event_type == RaceEventType.FINISH_CROSSED for event in scenario.race_state.events)
 
 
-def test_finish_counts_when_boat_reaches_finish_mark_after_required_marks():
+def test_t3_does_not_finish_at_leeward_mark_before_start_finish_line():
     scenario = default_scenario()
     scenario.course = course_for_format(RaceFormat.T3)
     boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
     boat.has_started = True
     boat.target_leg_index = 2
-    finish = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.FINISH)
-    previous = Vector2(finish.position.x, finish.position.y - 80.0)
-    boat.position = Vector2(finish.position.x, finish.position.y + 80.0)
+    boat.mark_approach_target_leg_index = 2
+    leeward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
+    previous = Vector2(leeward.position.x + 40.0, leeward.position.y + 20.0)
+    boat.position = Vector2(leeward.position.x + 40.0, leeward.position.y - 20.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.target_leg_index == 3
+    assert not boat.is_finished
+    assert boat.name not in scenario.race_state.finished_boats
+
+
+def test_t3_finishes_on_start_finish_line_after_leeward_mark():
+    scenario = default_scenario()
+    scenario.course = course_for_format(RaceFormat.T3)
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    boat.target_leg_index = 3
+    previous = Vector2(450.0, 690.0)
+    boat.position = Vector2(450.0, 710.0)
 
     detect_race_events(scenario, {boat.name: previous})
 
     assert boat.is_finished
     assert boat.name in scenario.race_state.finished_boats
+
+
+def test_t3_does_not_finish_on_start_finish_line_before_leeward_mark():
+    scenario = default_scenario()
+    scenario.course = course_for_format(RaceFormat.T3)
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    boat.target_leg_index = 2
+    previous = Vector2(450.0, 690.0)
+    boat.position = Vector2(450.0, 710.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert not boat.is_finished
+    assert boat.target_leg_index == 2
+    assert boat.name not in scenario.race_state.finished_boats
 
 
 def test_w_course_does_not_finish_at_leeward_mark_before_sequence_complete():

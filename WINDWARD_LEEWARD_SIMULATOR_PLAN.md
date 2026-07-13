@@ -59,7 +59,7 @@ Course setup behavior:
 - The course should validate that required marks exist before race start.
 - The race course should support common formats:
   - `W2`: start, windward mark, downwind finish
-  - `T3`: start, windward mark, gybe mark, downwind finish
+  - `T3`: start, windward mark, gybe mark, leeward mark, upwind finish through the start/finish line
   - `W4`: start, windward mark, leeward mark, windward mark, downwind finish
   - `W6`: two `W3` laps, then downwind finish
   - Future: custom leg sequences and offset/spreader mark routes

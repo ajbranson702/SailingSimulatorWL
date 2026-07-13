@@ -25,7 +25,7 @@ def test_course_presets_include_required_marks():
     assert {mark.mark_type for mark in course_for_format(RaceFormat.T3).marks} == {
         MarkType.WINDWARD,
         MarkType.GYBE,
-        MarkType.FINISH,
+        MarkType.LEEWARD,
     }
 
 
@@ -48,11 +48,11 @@ def test_scenario_serialization_round_trip_preserves_course():
     assert [mark.mark_type for mark in restored.course.marks] == [
         MarkType.WINDWARD,
         MarkType.GYBE,
-        MarkType.FINISH,
+        MarkType.LEEWARD,
     ]
 
 
-def test_adapting_w_course_to_t3_adds_gybe_and_uses_leeward_as_finish():
+def test_adapting_w_course_to_t3_adds_gybe_and_keeps_leeward_mark():
     course = course_for_format(RaceFormat.W2)
 
     adapt_course_to_format(course, RaceFormat.T3)
@@ -61,11 +61,11 @@ def test_adapting_w_course_to_t3_adds_gybe_and_uses_leeward_as_finish():
     assert {mark.mark_type for mark in course.marks} == {
         MarkType.WINDWARD,
         MarkType.GYBE,
-        MarkType.FINISH,
+        MarkType.LEEWARD,
     }
 
 
-def test_adapting_t3_back_to_w_course_uses_finish_as_leeward():
+def test_adapting_t3_back_to_w_course_removes_gybe_mark():
     course = course_for_format(RaceFormat.T3)
 
     adapt_course_to_format(course, RaceFormat.W4)
@@ -75,6 +75,23 @@ def test_adapting_t3_back_to_w_course_uses_finish_as_leeward():
         MarkType.WINDWARD,
         MarkType.LEEWARD,
     }
+
+
+def test_loading_legacy_t3_finish_mark_converts_it_to_leeward():
+    scenario = default_scenario()
+    scenario.course = course_for_format(RaceFormat.T3)
+    leeward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
+    leeward.mark_type = MarkType.FINISH
+    leeward.label = "F"
+
+    restored = scenario_from_dict(scenario_to_dict(scenario))
+
+    assert {mark.mark_type for mark in restored.course.marks} == {
+        MarkType.WINDWARD,
+        MarkType.GYBE,
+        MarkType.LEEWARD,
+    }
+    assert next(mark for mark in restored.course.marks if mark.mark_type == MarkType.LEEWARD).label == "L"
 
 
 def test_adapting_t3_to_w2_removes_gybe_mark():

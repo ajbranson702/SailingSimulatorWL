@@ -12,7 +12,7 @@ def course_for_format(race_format: RaceFormat) -> Course:
         RaceFormat.T3: [
             Mark(MarkType.WINDWARD, Vector2(460.0, 160.0), "W"),
             Mark(MarkType.GYBE, Vector2(650.0, 420.0), "G"),
-            Mark(MarkType.FINISH, Vector2(460.0, 720.0), "F"),
+            Mark(MarkType.LEEWARD, Vector2(460.0, 790.0), "L"),
         ],
         RaceFormat.W4: [
             Mark(MarkType.WINDWARD, Vector2(460.0, 160.0), "W"),
@@ -32,7 +32,7 @@ def course_for_format(race_format: RaceFormat) -> Course:
 
 def required_mark_types_for(race_format: RaceFormat) -> set[MarkType]:
     if race_format == RaceFormat.T3:
-        return {MarkType.WINDWARD, MarkType.GYBE, MarkType.FINISH}
+        return {MarkType.WINDWARD, MarkType.GYBE, MarkType.LEEWARD}
     return {MarkType.WINDWARD, MarkType.LEEWARD}
 
 
@@ -43,16 +43,16 @@ def valid_mark_types_for(race_format: RaceFormat) -> set[MarkType]:
 def adapt_course_to_format(course: Course, race_format: RaceFormat) -> None:
     course.race_format = race_format
     if race_format == RaceFormat.T3:
-        _convert_mark(course, MarkType.LEEWARD, MarkType.FINISH, "F")
-        _ensure_mark(course, MarkType.WINDWARD, Vector2(460.0, 160.0), "W")
-        _ensure_mark(course, MarkType.GYBE, Vector2(650.0, 420.0), "G")
-        _ensure_mark(course, MarkType.FINISH, Vector2(460.0, 720.0), "F")
+        _convert_mark(course, MarkType.FINISH, MarkType.LEEWARD, "L")
+        _ensure_mark(course, MarkType.WINDWARD, Vector2(460.0, 160.0), "W").label = "W"
+        _ensure_mark(course, MarkType.GYBE, Vector2(650.0, 420.0), "G").label = "G"
+        _ensure_mark(course, MarkType.LEEWARD, Vector2(460.0, 790.0), "L").label = "L"
         remove_invalid_marks(course)
         return
 
     _convert_mark(course, MarkType.FINISH, MarkType.LEEWARD, "L/F")
-    _ensure_mark(course, MarkType.WINDWARD, Vector2(460.0, 160.0), "W")
-    _ensure_mark(course, MarkType.LEEWARD, Vector2(460.0, 720.0), "L/F")
+    _ensure_mark(course, MarkType.WINDWARD, Vector2(460.0, 160.0), "W").label = "W"
+    _ensure_mark(course, MarkType.LEEWARD, Vector2(460.0, 720.0), "L/F").label = "L/F"
     remove_invalid_marks(course)
 
 

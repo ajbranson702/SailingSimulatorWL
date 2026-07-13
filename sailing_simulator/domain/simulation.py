@@ -12,7 +12,6 @@ from sailing_simulator.domain.models import (
     Polar,
     RaceEvent,
     RaceEventType,
-    RaceFormat,
     Scenario,
     Vector2,
 )
@@ -245,15 +244,10 @@ def reset_ai_rounding_stage_if_needed(boat: Boat) -> None:
 
 
 def ai_finish_target_position(scenario: Scenario) -> Vector2:
-    if scenario.course.race_format == RaceFormat.T3:
-        return finish_position_for(scenario.course)
     return start_line_center(scenario)
 
 
 def ai_finish_target_position_for_boat(boat: Boat, scenario: Scenario) -> Vector2:
-    if scenario.course.race_format == RaceFormat.T3:
-        return finish_position_for(scenario.course)
-
     start = scenario.course.start_line
     dx = start.committee_boat.x - start.pin.x
     dy = start.committee_boat.y - start.pin.y
@@ -572,8 +566,7 @@ def detect_course_progress(scenario: Scenario, previous_positions: dict[str, Vec
                 continue
 
             crossing = start_finish_line_crossing_parameter(scenario, previous, boat.position)
-            finish_mark_crossing = finish_mark_crossing_parameter(scenario, previous, boat.position)
-            crossing = earliest_valid_parameter([crossing, finish_mark_crossing], segment_position)
+            crossing = earliest_valid_parameter([crossing], segment_position)
             if crossing is None:
                 break
 
@@ -859,8 +852,6 @@ def rounding_exit_target_position(scenario: Scenario, target_leg_index: int) -> 
     next_target = target_mark_for(scenario.course, target_leg_index + 1)
     if next_target is not None:
         return next_target.position
-    if scenario.course.race_format == RaceFormat.T3:
-        return finish_position_for(scenario.course)
     return start_line_center(scenario)
 
 
@@ -933,23 +924,6 @@ def extended_start_finish_line(scenario: Scenario) -> tuple[Vector2, Vector2]:
         Vector2(start.pin.x - extension_x, start.pin.y - extension_y),
         Vector2(start.committee_boat.x + extension_x, start.committee_boat.y + extension_y),
     )
-
-
-def finish_mark_crossing_parameter(scenario: Scenario, segment_start: Vector2, segment_end: Vector2) -> float | None:
-    finish_mark = finish_mark_for(scenario)
-    if finish_mark is None:
-        return None
-    return mark_crossing_parameter(finish_mark.position, segment_start, segment_end, MARK_COLLISION_RADIUS)
-
-
-def finish_mark_for(scenario: Scenario) -> Mark | None:
-    if scenario.course.race_format != RaceFormat.T3:
-        return None
-
-    explicit_finish = next((mark for mark in scenario.course.marks if mark.mark_type == MarkType.FINISH), None)
-    if explicit_finish is not None:
-        return explicit_finish
-    return None
 
 
 def earliest_valid_parameter(parameters: list[float | None], minimum: float) -> float | None:

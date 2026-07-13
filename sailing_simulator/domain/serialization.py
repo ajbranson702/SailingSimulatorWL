@@ -24,6 +24,7 @@ from sailing_simulator.domain.models import (
     WindMode,
     WindModel,
 )
+from sailing_simulator.domain.presets import adapt_course_to_format
 
 
 SCENARIO_VERSION = 1
@@ -116,7 +117,7 @@ def course_to_dict(course: Course) -> dict[str, Any]:
 
 def course_from_dict(data: dict[str, Any]) -> Course:
     start_line = data.get("start_line", {})
-    return Course(
+    course = Course(
         race_format=RaceFormat(data.get("race_format", RaceFormat.W2.value)),
         start_line=StartLine(
             pin=vector_from_dict(start_line.get("pin", {}), Vector2(360.0, 700.0)),
@@ -126,6 +127,8 @@ def course_from_dict(data: dict[str, Any]) -> Course:
         boundary_width=float(data.get("boundary_width", 900.0)),
         boundary_height=float(data.get("boundary_height", 900.0)),
     )
+    adapt_course_to_format(course, course.race_format)
+    return course
 
 
 def mark_to_dict(mark: Mark) -> dict[str, Any]:
