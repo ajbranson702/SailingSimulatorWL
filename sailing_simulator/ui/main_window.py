@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -209,6 +211,17 @@ class MainWindow(QMainWindow):
         self.status.setStyleSheet("font-family: Consolas, monospace;")
         layout.addWidget(self.status)
 
+        layout.addWidget(self._section_label("Course Progress"))
+        self.progress_table = QTableWidget()
+        self.progress_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.progress_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self.progress_table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.progress_table.setMinimumHeight(118)
+        self.progress_table.setMaximumHeight(190)
+        self.progress_table.verticalHeader().setVisible(True)
+        self.progress_table.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(self.progress_table)
+
         layout.addStretch(1)
 
         note = QLabel("Drag marks or start-line endpoints on the course canvas.")
@@ -383,6 +396,7 @@ class MainWindow(QMainWindow):
         user_boat = self._user_boat()
         if user_boat is None:
             self.status.setText("No boats in scenario")
+            self._refresh_progress_table()
             return
 
         local_wind_direction, local_wind_speed = wind_at(self.scenario, user_boat.position)
@@ -401,6 +415,28 @@ class MainWindow(QMainWindow):
             f"{self._rankings_text()}\n"
             f"{self._event_status_text()}"
         )
+        self._refresh_progress_table()
+
+    def _refresh_progress_table(self) -> None:
+        headers = [target_label_for(self.scenario.course, index) for index in range(total_targets_for(self.scenario.course))]
+        headers.append("Finish")
+        self.progress_table.setColumnCount(len(headers))
+        self.progress_table.setRowCount(len(self.scenario.boats))
+        self.progress_table.setHorizontalHeaderLabels(headers)
+        self.progress_table.setVerticalHeaderLabels([boat.name for boat in self.scenario.boats])
+
+        finish_column = len(headers) - 1
+        for row, boat in enumerate(self.scenario.boats):
+            for column in range(finish_column):
+                item = QTableWidgetItem("✓" if boat.target_leg_index > column or boat.is_finished else "")
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.progress_table.setItem(row, column, item)
+
+            finish_item = QTableWidgetItem("✓" if boat.is_finished else "")
+            finish_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.progress_table.setItem(row, finish_column, finish_item)
+
+        self.progress_table.resizeColumnsToContents()
 
     def _set_boat_count(self, count: int) -> None:
         boats = self.scenario.boats

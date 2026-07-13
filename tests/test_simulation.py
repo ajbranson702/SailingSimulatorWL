@@ -335,6 +335,25 @@ def test_w2_does_not_finish_when_passing_line_before_leeward_mark():
     assert not any(event.event_type == RaceEventType.FINISH_CROSSED for event in scenario.race_state.events)
 
 
+def test_w2_does_not_round_deep_leeward_when_crossing_mid_course_line():
+    scenario = default_scenario()
+    scenario.course.start_line = StartLine(pin=Vector2(320.0, 700.0), committee_boat=Vector2(560.0, 700.0))
+    leeward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
+    leeward.position = Vector2(430.0, 850.0)
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    boat.target_leg_index = 1
+    previous = Vector2(450.0, 690.0)
+    boat.position = Vector2(450.0, 710.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.target_leg_index == 1
+    assert not boat.is_finished
+    assert not any(event.event_type == RaceEventType.MARK_ROUNDED for event in scenario.race_state.events)
+    assert not any(event.event_type == RaceEventType.FINISH_CROSSED for event in scenario.race_state.events)
+
+
 def test_finish_counts_when_boat_reaches_finish_mark_after_required_marks():
     scenario = default_scenario()
     scenario.course = course_for_format(RaceFormat.T3)
