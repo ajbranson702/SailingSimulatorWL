@@ -228,8 +228,12 @@ class CourseCanvas(QWidget):
         for index, mark in enumerate(self.scenario.course.marks):
             candidates.append((self._distance(position, self._to_screen(mark.position, rect)), DragTarget("mark", index)))
 
+        if self._can_drag_boats():
+            for index, boat in enumerate(self.scenario.boats):
+                candidates.append((self._distance(position, self._to_screen(boat.position, rect)), DragTarget("boat", index)))
+
         distance, target = min(candidates, key=lambda candidate: candidate[0])
-        return target if distance <= 18.0 else None
+        return target if distance <= 22.0 else None
 
     def _move_drag_target(self, position: QPointF) -> None:
         if self._drag_target is None:
@@ -243,8 +247,20 @@ class CourseCanvas(QWidget):
             course.start_line.committee_boat = course_point
         elif self._drag_target.kind == "mark" and self._drag_target.index is not None:
             course.marks[self._drag_target.index].position = course_point
+        elif self._drag_target.kind == "boat" and self._drag_target.index is not None and self._can_drag_boats():
+            boat = self.scenario.boats[self._drag_target.index]
+            boat.position = course_point
+            boat.speed_knots = 0.0
+            boat.track = []
 
         self.update()
+
+    def _can_drag_boats(self) -> bool:
+        return (
+            not self.scenario.race_state.is_running
+            and self.scenario.race_state.elapsed_seconds == 0.0
+            and all(not boat.has_started for boat in self.scenario.boats)
+        )
 
     def _course_rect(self) -> QRectF:
         return QRectF(self.rect().adjusted(18, 18, -18, -18))

@@ -70,6 +70,7 @@ Course setup behavior:
 - One boat is user-controlled.
 - Remaining boats are computer-controlled.
 - Boats start on or behind the start line.
+- User can manually place boats before the race starts to set up specific scenarios.
 - Boats should have simple collision/rule handling eventually, but the first version can focus on movement and tactics.
 
 Initial AI behavior:
@@ -196,6 +197,7 @@ Rules behavior should be introduced after the core race simulator, AI routing, t
 
 Initial rules scope:
 
+- Start timer and countdown sequence for practicing race starts.
 - Port/starboard right-of-way.
 - Windward/leeward right-of-way on the same tack.
 - Clear ahead / clear astern and overlap detection.
@@ -207,6 +209,7 @@ Initial rules scope:
 
 User-facing rules behavior:
 
+- Show countdown status before the start and transition cleanly into live race timing.
 - Show right-of-way and keep-clear state for nearby boats.
 - Warn the user before a maneuver creates a likely foul.
 - Flag incidents after contact, failure to keep clear, or failure to give mark-room.
@@ -295,7 +298,7 @@ The build should be organized around phases rather than fixed calendar weeks. Th
 | 6 | Computer-controlled boats | User can race against AI boats |
 | 7 | Terrain wind effects | Terrain affects the visible wind grid |
 | 8 | Polish, packaging, and scenario library | Packaged Windows prototype is ready to use |
-| 9 | Racing rules and legal maneuvers | AI and user interactions follow core Racing Rules of Sailing concepts |
+| 9 | Start sequence, racing rules, and legal maneuvers | AI and user interactions follow core Racing Rules of Sailing concepts |
 
 ### Phase 1: Product Skeleton and Technical Foundation
 
@@ -358,6 +361,7 @@ Status: initial wind engine and visualization implementation complete.
 
 - Add fleet-size setting.
 - Spawn AI boats at the start.
+- Allow pre-start manual boat placement for scenario setup.
 - Implement simple VMG-based steering to next mark.
 - Add tack/gybe decisions.
 - Show rankings and boat identifiers.
@@ -387,18 +391,20 @@ Deliverable: user can add terrain and see it alter wind behavior.
 
 Deliverable: packaged Windows prototype ready for repeated experimentation.
 
-### Phase 9: Racing Rules and Legal Maneuvers
+### Phase 9: Start Sequence, Racing Rules, and Legal Maneuvers
 
+- Add a start timer and countdown sequence for practice starts.
 - Add a rules engine that evaluates nearby boat relationships each simulation tick.
 - Detect port/starboard, windward/leeward, clear ahead/astern, and overlap states.
 - Add mark-room zones and determine which boats are entitled to room at each mark.
 - Prevent or discourage illegal AI maneuvers such as tacking too close, failing to keep clear, or denying mark-room.
 - Add user warnings for likely fouls before tacks, gybes, and close crossings.
+- Add start-line timing behavior, including early-start detection and recall/penalty options.
 - Record rules incidents in the event log with involved boats and rule category.
 - Add a simple penalty model, such as a penalty turn or time penalty.
 - Add tests for common rules situations and mark-room scenarios.
 
-Deliverable: AI and user boat interactions follow the core Racing Rules of Sailing well enough for tactical experimentation.
+Deliverable: starts, AI decisions, and user boat interactions follow the core Racing Rules of Sailing well enough for tactical experimentation.
 
 ## Suggested Milestones
 
@@ -419,6 +425,7 @@ Deliverable: AI and user boat interactions follow the core Racing Rules of Saili
 - Should AI boats prioritize simple mark navigation or realistic tactical choices early?
 - Which Racing Rules of Sailing edition should the simulator target first?
 - Should rules incidents result in automatic penalties, warnings only, or configurable enforcement?
+- Should the start countdown support common sequences such as 5-minute, 3-minute, and custom practice starts?
 
 ## Immediate Next Steps
 

@@ -224,7 +224,7 @@ class MainWindow(QMainWindow):
 
         layout.addStretch(1)
 
-        note = QLabel("Drag marks or start-line endpoints on the course canvas.")
+        note = QLabel("Before starting, drag boats, marks, or start-line endpoints on the course canvas.")
         note.setWordWrap(True)
         note.setStyleSheet("color: #536471;")
         layout.addWidget(note)
@@ -324,7 +324,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Loaded scenario from {path}")
 
     def _on_canvas_changed(self) -> None:
-        self.statusBar().showMessage("Course layout updated")
+        self._refresh_boat_status()
+        self.statusBar().showMessage("Scenario layout updated")
 
     def _on_boat_count_changed(self, count: int) -> None:
         self._set_boat_count(count)
