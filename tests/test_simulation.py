@@ -1,11 +1,14 @@
 from sailing_simulator.domain.models import BoatControlMode, MarkType, RaceEventType, Vector2, default_scenario
 from sailing_simulator.domain.simulation import (
+    bearing_to,
+    best_vmg_heading,
     detect_race_events,
     step_scenario,
     steer_away_from_wind,
     tack,
     target_boat_speed,
     true_wind_angle,
+    turn_toward_heading,
 )
 
 
@@ -53,6 +56,33 @@ def test_tack_turns_boat_roughly_onto_opposite_tack_and_slows():
 
     assert boat.heading_degrees == 45.0
     assert boat.speed_knots == 3.25
+
+
+def test_ai_boat_moves_under_simulation():
+    scenario = default_scenario()
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    starting_position = ai_boat.position
+
+    step_scenario(scenario, 5.0)
+
+    assert ai_boat.position != starting_position
+    assert ai_boat.speed_knots > 0.0
+
+
+def test_best_vmg_heading_points_generally_toward_target():
+    scenario = default_scenario()
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    target = scenario.course.marks[0].position
+
+    heading = best_vmg_heading(ai_boat, scenario, target)
+    target_bearing = bearing_to(ai_boat.position, target)
+
+    assert abs((heading - target_bearing + 180.0) % 360.0 - 180.0) <= 70.0
+
+
+def test_turn_toward_heading_uses_shortest_turn():
+    assert turn_toward_heading(315.0, 0.0, 18.0) == 333.0
+    assert turn_toward_heading(45.0, 0.0, 18.0) == 27.0
 
 
 def test_line_crossing_starts_before_it_can_finish():

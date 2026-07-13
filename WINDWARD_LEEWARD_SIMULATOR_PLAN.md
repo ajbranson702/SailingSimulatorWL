@@ -325,6 +325,8 @@ Status: initial wind engine and visualization implementation complete.
 
 Deliverable: user can race against computer-controlled boats.
 
+Status: initial AI fleet implementation complete.
+
 ### Phase 7: Terrain Wind Effects
 
 - Add terrain drawing/placement tools.

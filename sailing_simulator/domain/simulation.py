@@ -14,7 +14,7 @@ from sailing_simulator.domain.models import (
     Scenario,
     Vector2,
 )
-from sailing_simulator.domain.race_progress import target_mark_for, total_targets_for
+from sailing_simulator.domain.race_progress import finish_position_for, target_mark_for, total_targets_for
 
 MIN_UPWIND_ANGLE_DEGREES = 45.0
 COURSE_UNITS_PER_NAUTICAL_MILE = 1800.0
@@ -33,9 +33,48 @@ def step_scenario(scenario: Scenario, elapsed_seconds: float) -> None:
     update_wind_field(scenario)
     for boat in scenario.boats:
         if boat.control_mode == BoatControlMode.AI:
-            continue
+            update_ai_heading(boat, scenario)
         step_boat(boat, scenario, elapsed_seconds)
     detect_race_events(scenario, previous_positions)
+
+
+def update_ai_heading(boat: Boat, scenario: Scenario) -> None:
+    if boat.is_finished:
+        boat.speed_knots = 0.0
+        return
+
+    target = target_mark_for(scenario.course, boat.target_leg_index) if boat.has_started else None
+    target_position = target.position if target is not None else first_ai_target_position(scenario)
+    desired_heading = best_vmg_heading(boat, scenario, target_position)
+    boat.heading_degrees = turn_toward_heading(boat.heading_degrees, desired_heading, 18.0)
+    release_collision_stop_if_heading_changed(boat)
+
+
+def first_ai_target_position(scenario: Scenario) -> Vector2:
+    first_mark = target_mark_for(scenario.course, 0)
+    if first_mark is not None:
+        return first_mark.position
+    return finish_position_for(scenario.course)
+
+
+def best_vmg_heading(boat: Boat, scenario: Scenario, target_position: Vector2) -> float:
+    from sailing_simulator.domain.wind import wind_at
+
+    wind_direction, wind_speed = wind_at(scenario, boat.position)
+    target_bearing = bearing_to(boat.position, target_position)
+    best_heading = boat.heading_degrees
+    best_score = -float("inf")
+
+    for heading in range(0, 360, 5):
+        twa = true_wind_angle(float(heading), wind_direction)
+        speed = target_boat_speed(scenario.polar, wind_speed, twa)
+        alignment = math.cos(math.radians(signed_angle(float(heading), target_bearing)))
+        score = speed * alignment
+        if score > best_score:
+            best_score = score
+            best_heading = float(heading)
+
+    return best_heading
 
 
 def step_boat(boat: Boat, scenario: Scenario, elapsed_seconds: float) -> None:
@@ -115,6 +154,18 @@ def tack(boat: Boat, wind_from_degrees: float) -> None:
     boat.heading_degrees = normalize_degrees(boat.heading_degrees + turn)
     boat.speed_knots *= 0.65
     release_collision_stop_if_heading_changed(boat)
+
+
+def bearing_to(origin: Vector2, target: Vector2) -> float:
+    dx = target.x - origin.x
+    dy = origin.y - target.y
+    return normalize_degrees(math.degrees(math.atan2(dx, dy)))
+
+
+def turn_toward_heading(current_heading: float, target_heading: float, max_degrees: float) -> float:
+    delta = signed_angle(target_heading, current_heading)
+    turn = max(-max_degrees, min(max_degrees, delta))
+    return normalize_degrees(current_heading + turn)
 
 
 def reset_boats_to_start(scenario: Scenario) -> None:

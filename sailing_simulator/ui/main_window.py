@@ -25,7 +25,7 @@ from sailing_simulator.domain.presets import (
     invalid_marks_for,
     remove_invalid_marks,
 )
-from sailing_simulator.domain.race_progress import target_label_for, total_targets_for
+from sailing_simulator.domain.race_progress import ranked_boats, target_label_for, total_targets_for
 from sailing_simulator.domain.serialization import load_scenario, save_scenario
 from sailing_simulator.domain.simulation import (
     reset_boats_to_start,
@@ -53,7 +53,7 @@ class MainWindow(QMainWindow):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setCentralWidget(self._build_content())
         self._refresh_controls_from_scenario()
-        self.statusBar().showMessage("Phase 5 wind scenario controls ready")
+        self.statusBar().showMessage("Phase 6 AI fleet controls ready")
 
     def _build_content(self) -> QWidget:
         root = QWidget()
@@ -398,6 +398,7 @@ class MainWindow(QMainWindow):
             f"Elapsed: {self.scenario.race_state.elapsed_seconds:.1f} s\n"
             f"Course: {self.scenario.course.race_format.value}\n"
             f"{progress_text}\n"
+            f"{self._rankings_text()}\n"
             f"{self._event_status_text()}"
         )
 
@@ -440,6 +441,13 @@ class MainWindow(QMainWindow):
             finished = ", ".join(sorted(self.scenario.race_state.finished_boats))
             return f"Finished: {finished}"
         return "Events: none"
+
+    def _rankings_text(self) -> str:
+        ranked = ranked_boats(self.scenario.course, self.scenario.boats)
+        entries = [f"{index + 1}. {boat.name}" for index, boat in enumerate(ranked[:5])]
+        if not entries:
+            return "Rankings: none"
+        return "Rankings: " + " | ".join(entries)
 
     def _selected_race_format(self) -> RaceFormat:
         return RaceFormat(self.format_combo.currentData())

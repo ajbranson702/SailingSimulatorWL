@@ -4,7 +4,7 @@ Windows desktop simulator for experimenting with windward-leeward sailing race s
 
 ## Current Status
 
-Phase 5 is underway:
+Phase 6 is complete:
 
 - PySide6 app shell
 - Single simulator screen
@@ -23,6 +23,9 @@ Phase 5 is underway:
 - Wind grid generated from current wind scenario
 - Static, oscillating, persistent-shift, combined-shift, and gusty wind modes
 - Boat physics and sail display use local wind
+- AI boats steer toward course targets using simple VMG-based heading choices
+- AI boats make basic tack/gybe-style direction changes through VMG heading selection
+- Rankings are shown in the status panel
 - Basic domain tests
 
 ## Controls
