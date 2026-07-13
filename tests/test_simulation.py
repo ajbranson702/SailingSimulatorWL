@@ -14,6 +14,7 @@ from sailing_simulator.domain.simulation import (
     AI_MIN_MANEUVER_INTERVAL_SECONDS,
     ai_board_heading,
     ai_board_near_boundary,
+    ai_steering_target_position,
     ai_target_position,
     bearing_to,
     best_vmg_heading,
@@ -155,6 +156,33 @@ def test_ai_targets_leeward_mark_before_w2_finish_line():
     leeward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
 
     assert ai_target_position(ai_boat, scenario) == leeward.position
+
+
+def test_ai_uses_staged_leeward_rounding_waypoints():
+    scenario = default_scenario()
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    ai_boat.has_started = True
+    ai_boat.target_leg_index = 1
+    leeward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
+    leeward.position = Vector2(460.0, 720.0)
+
+    ai_boat.position = Vector2(380.0, 650.0)
+    approach_target = ai_steering_target_position(ai_boat, scenario)
+    assert approach_target.y > leeward.position.y
+    assert approach_target.x < leeward.position.x
+    assert ai_boat.ai_rounding_stage == 0
+
+    ai_boat.position = approach_target
+    wrap_target = ai_steering_target_position(ai_boat, scenario)
+    assert wrap_target.y > leeward.position.y
+    assert wrap_target.x > leeward.position.x
+    assert ai_boat.ai_rounding_stage == 1
+
+    ai_boat.position = wrap_target
+    exit_target = ai_steering_target_position(ai_boat, scenario)
+    assert exit_target.y < leeward.position.y
+    assert exit_target.x > leeward.position.x
+    assert ai_boat.ai_rounding_stage == 2
 
 
 def test_ai_targets_t3_finish_mark_after_required_marks_are_complete():

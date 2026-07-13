@@ -95,6 +95,8 @@ class Boat:
     ai_board: int | None = None
     ai_board_target_leg_index: int = -1
     ai_last_maneuver_seconds: float = -9999.0
+    ai_rounding_target_leg_index: int = -1
+    ai_rounding_stage: int = 0
     ai_collision_escape_until_seconds: float = 0.0
     ai_collision_escape_heading: float | None = None
 
