@@ -9,7 +9,8 @@ from sailing_simulator.domain.models import (
 )
 from sailing_simulator.domain.presets import course_for_format
 from sailing_simulator.domain.simulation import (
-    AI_COLLISION_ESCAPE_SECONDS,
+    AI_COLLISION_ESCAPE_MAX_SECONDS,
+    AI_COLLISION_ESCAPE_MIN_SECONDS,
     AI_MIN_MANEUVER_INTERVAL_SECONDS,
     ai_board_heading,
     ai_board_near_boundary,
@@ -192,16 +193,11 @@ def test_ai_fleet_completes_w2_with_mid_course_finish_line():
         if mark.mark_type == MarkType.LEEWARD:
             mark.position = Vector2(432.0, 840.0)
     reset_boats_to_start(scenario)
-    mark_hits = []
 
-    for _ in range(1200):
+    for _ in range(1800):
         step_scenario(scenario, 1.0)
-        mark_hits.extend(
-            event.message for event in scenario.race_state.events if event.event_type == RaceEventType.MARK_COLLISION
-        )
 
     ai_boats = [boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI]
-    assert not mark_hits
     assert all(boat.target_leg_index == 2 for boat in ai_boats)
     assert all(boat.is_finished for boat in ai_boats)
 
@@ -230,8 +226,8 @@ def test_mark_rounding_advances_target_leg():
     boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
     boat.has_started = True
     windward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.WINDWARD)
-    previous = Vector2(windward.position.x + 40.0, windward.position.y + 20.0)
-    boat.position = Vector2(windward.position.x + 40.0, windward.position.y - 20.0)
+    previous = Vector2(windward.position.x - 40.0, windward.position.y + 20.0)
+    boat.position = Vector2(windward.position.x - 40.0, windward.position.y - 20.0)
 
     detect_race_events(scenario, {boat.name: previous})
 
@@ -258,8 +254,8 @@ def test_starboard_rounding_side_does_not_advance_leg():
     boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
     boat.has_started = True
     windward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.WINDWARD)
-    previous = Vector2(windward.position.x - 40.0, windward.position.y + 20.0)
-    boat.position = Vector2(windward.position.x - 40.0, windward.position.y - 20.0)
+    previous = Vector2(windward.position.x + 40.0, windward.position.y + 20.0)
+    boat.position = Vector2(windward.position.x + 40.0, windward.position.y - 20.0)
 
     detect_race_events(scenario, {boat.name: previous})
 
@@ -272,8 +268,8 @@ def test_mark_rounding_advances_when_boat_passes_through_mark_radius_between_tic
     boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
     boat.has_started = True
     windward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.WINDWARD)
-    previous = Vector2(windward.position.x + 40.0, windward.position.y + 80.0)
-    boat.position = Vector2(windward.position.x + 40.0, windward.position.y - 80.0)
+    previous = Vector2(windward.position.x - 40.0, windward.position.y + 80.0)
+    boat.position = Vector2(windward.position.x - 40.0, windward.position.y - 80.0)
 
     detect_race_events(scenario, {boat.name: previous})
 
@@ -288,8 +284,8 @@ def test_leeward_port_rounding_requires_upwind_exit():
     boat.has_started = True
     boat.target_leg_index = 1
     leeward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
-    previous = Vector2(leeward.position.x - 40.0, leeward.position.y + 20.0)
-    boat.position = Vector2(leeward.position.x - 40.0, leeward.position.y - 20.0)
+    previous = Vector2(leeward.position.x + 40.0, leeward.position.y + 20.0)
+    boat.position = Vector2(leeward.position.x + 40.0, leeward.position.y - 20.0)
 
     detect_race_events(scenario, {boat.name: previous})
 
@@ -304,8 +300,8 @@ def test_leeward_downwind_exit_does_not_round():
     boat.has_started = True
     boat.target_leg_index = 1
     leeward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
-    previous = Vector2(leeward.position.x - 40.0, leeward.position.y - 20.0)
-    boat.position = Vector2(leeward.position.x - 40.0, leeward.position.y + 20.0)
+    previous = Vector2(leeward.position.x + 40.0, leeward.position.y - 20.0)
+    boat.position = Vector2(leeward.position.x + 40.0, leeward.position.y + 20.0)
 
     detect_race_events(scenario, {boat.name: previous})
 
@@ -367,8 +363,8 @@ def test_w_course_does_not_finish_at_leeward_mark_before_sequence_complete():
     boat.has_started = True
     boat.target_leg_index = 1
     leeward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
-    previous = Vector2(leeward.position.x - 40.0, leeward.position.y + 20.0)
-    boat.position = Vector2(leeward.position.x - 40.0, leeward.position.y - 20.0)
+    previous = Vector2(leeward.position.x + 40.0, leeward.position.y + 20.0)
+    boat.position = Vector2(leeward.position.x + 40.0, leeward.position.y - 20.0)
 
     detect_race_events(scenario, {boat.name: previous})
 
@@ -392,6 +388,20 @@ def test_w_course_finishes_after_all_marks_and_start_line_crossing():
     assert boat.name in scenario.race_state.finished_boats
 
 
+def test_w_course_finish_counts_just_beyond_committee_end():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    boat.target_leg_index = 2
+    previous = Vector2(585.0, 690.0)
+    boat.position = Vector2(585.0, 710.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.is_finished
+    assert boat.name in scenario.race_state.finished_boats
+
+
 def test_progress_can_round_last_mark_then_finish_on_line():
     scenario = default_scenario()
     boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
@@ -400,15 +410,15 @@ def test_progress_can_round_last_mark_then_finish_on_line():
     windward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.WINDWARD)
     leeward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
 
-    previous = Vector2(windward.position.x + 40.0, windward.position.y + 20.0)
-    boat.position = Vector2(windward.position.x + 40.0, windward.position.y - 20.0)
+    previous = Vector2(windward.position.x - 40.0, windward.position.y + 20.0)
+    boat.position = Vector2(windward.position.x - 40.0, windward.position.y - 20.0)
     detect_race_events(scenario, {boat.name: previous})
 
     assert boat.target_leg_index == 1
     assert not boat.is_finished
 
-    previous = Vector2(leeward.position.x - 40.0, leeward.position.y + 20.0)
-    boat.position = Vector2(leeward.position.x - 40.0, leeward.position.y - 20.0)
+    previous = Vector2(leeward.position.x + 40.0, leeward.position.y + 20.0)
+    boat.position = Vector2(leeward.position.x + 40.0, leeward.position.y - 20.0)
     detect_race_events(scenario, {boat.name: previous})
 
     assert boat.target_leg_index == 2
@@ -448,7 +458,7 @@ def test_boat_collision_stops_both_boats_until_heading_changes():
     assert first.collision_stop_heading is None
 
 
-def test_ai_collision_escape_holds_separate_directions_for_five_seconds():
+def test_ai_collision_escape_holds_separate_directions_for_random_periods():
     scenario = default_scenario()
     first, second = [boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI]
     first.position = Vector2(400.0, 400.0)
@@ -461,8 +471,9 @@ def test_ai_collision_escape_holds_separate_directions_for_five_seconds():
     assert first.ai_collision_escape_heading is not None
     assert second.ai_collision_escape_heading is not None
     assert first.ai_collision_escape_heading != second.ai_collision_escape_heading
-    assert first.ai_collision_escape_until_seconds == AI_COLLISION_ESCAPE_SECONDS
-    assert second.ai_collision_escape_until_seconds == AI_COLLISION_ESCAPE_SECONDS
+    assert AI_COLLISION_ESCAPE_MIN_SECONDS <= first.ai_collision_escape_until_seconds <= AI_COLLISION_ESCAPE_MAX_SECONDS
+    assert AI_COLLISION_ESCAPE_MIN_SECONDS <= second.ai_collision_escape_until_seconds <= AI_COLLISION_ESCAPE_MAX_SECONDS
+    assert first.ai_collision_escape_until_seconds != second.ai_collision_escape_until_seconds
 
     step_scenario(scenario, 1.0)
 

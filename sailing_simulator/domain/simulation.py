@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import math
+import random
 
 from sailing_simulator.domain.models import (
     Boat,
@@ -22,12 +23,13 @@ COURSE_UNITS_PER_NAUTICAL_MILE = 1800.0
 MAX_TRACK_POINTS = 300
 BOAT_COLLISION_RADIUS = 28.0
 MARK_COLLISION_RADIUS = 22.0
+START_FINISH_LINE_EXTENSION = 45.0
 MARK_ROUNDING_GATE_HALF_WIDTH = 140.0
 MARK_ROUNDING_ADVANCE_DISTANCE = 4.0
-AI_MARK_ROUNDING_OFFSET = 48.0
-AI_MARK_ROUNDING_ADVANCE = 18.0
-AI_LEEWARD_ROUNDING_OFFSET = 72.0
-AI_LEEWARD_ROUNDING_ADVANCE = 64.0
+AI_MARK_ROUNDING_OFFSET = 112.0
+AI_MARK_ROUNDING_ADVANCE = 28.0
+AI_LEEWARD_ROUNDING_OFFSET = 135.0
+AI_LEEWARD_ROUNDING_ADVANCE = 92.0
 AI_LEEWARD_EXIT_SWITCH_ADVANCE = 18.0
 AI_LEEWARD_EXIT_SWITCH_OFFSET = 50.0
 AI_CLOSE_TARGET_RADIUS = 85.0
@@ -35,7 +37,8 @@ AI_BOUNDARY_MARGIN = 75.0
 AI_MARK_AVOIDANCE_LOOKAHEAD = 140.0
 AI_MARK_AVOIDANCE_RADIUS = 42.0
 AI_MIN_MANEUVER_INTERVAL_SECONDS = 18.0
-AI_COLLISION_ESCAPE_SECONDS = 5.0
+AI_COLLISION_ESCAPE_MIN_SECONDS = 10.0
+AI_COLLISION_ESCAPE_MAX_SECONDS = 28.0
 AI_UPWIND_ANGLE = 45.0
 AI_DOWNWIND_ANGLE = 35.0
 
@@ -140,7 +143,9 @@ def ai_steering_target_position(boat: Boat, scenario: Scenario) -> Vector2:
     if incoming_unit is None or gate_unit is None:
         return target.position
 
-    side = port_rounding_boat_side(incoming_unit)
+    side = rounding_boat_side_unit(scenario, target_index)
+    if side is None:
+        return target.position
     if target.mark_type == MarkType.LEEWARD:
         return ai_leeward_rounding_target(boat, target, gate_unit, side)
 
@@ -457,7 +462,7 @@ def detect_course_progress(scenario: Scenario, previous_positions: dict[str, Vec
         segment_position = 0.0
         for _ in range(total_targets_for(scenario.course) + 2):
             if not boat.has_started:
-                crossing = segment_intersection_parameter(previous, boat.position, start.pin, start.committee_boat)
+                crossing = start_finish_line_crossing_parameter(scenario, previous, boat.position)
                 if crossing is None or crossing + 1e-9 < segment_position:
                     break
 
@@ -481,7 +486,7 @@ def detect_course_progress(scenario: Scenario, previous_positions: dict[str, Vec
                 )
                 continue
 
-            crossing = segment_intersection_parameter(previous, boat.position, start.pin, start.committee_boat)
+            crossing = start_finish_line_crossing_parameter(scenario, previous, boat.position)
             finish_mark_crossing = finish_mark_crossing_parameter(scenario, previous, boat.position)
             crossing = earliest_valid_parameter([crossing, finish_mark_crossing], segment_position)
             if crossing is None:
@@ -525,6 +530,8 @@ def detect_boat_collisions(scenario: Scenario) -> None:
     colliding_boats: set[str] = set()
     for first, second in itertools.combinations(scenario.boats, 2):
         if distance(first.position, second.position) <= BOAT_COLLISION_RADIUS:
+            if boats_are_actively_escaping(first, second, scenario):
+                continue
             colliding_boats.add(first.name)
             colliding_boats.add(second.name)
             set_collision_escape(first, second, scenario)
@@ -542,15 +549,28 @@ def detect_boat_collisions(scenario: Scenario) -> None:
             boat.collision_released_heading = None
 
 
+def boats_are_actively_escaping(first: Boat, second: Boat, scenario: Scenario) -> bool:
+    return (
+        first.control_mode == BoatControlMode.AI
+        and second.control_mode == BoatControlMode.AI
+        and first.ai_collision_escape_heading is not None
+        and second.ai_collision_escape_heading is not None
+        and scenario.race_state.elapsed_seconds < first.ai_collision_escape_until_seconds
+        and scenario.race_state.elapsed_seconds < second.ai_collision_escape_until_seconds
+    )
+
+
 def detect_mark_collisions(scenario: Scenario) -> None:
     for boat in scenario.boats:
-        for mark in scenario.course.marks:
-            if distance(boat.position, mark.position) <= MARK_COLLISION_RADIUS:
-                add_event(
-                    scenario,
-                    RaceEventType.MARK_COLLISION,
-                    f"{boat.name} hit mark {mark.label}.",
-                )
+        target = target_mark_for(scenario.course, boat.target_leg_index)
+        if target is None:
+            continue
+        if distance(boat.position, target.position) <= MARK_COLLISION_RADIUS:
+            add_event(
+                scenario,
+                RaceEventType.MARK_COLLISION,
+                f"{boat.name} hit mark {target.label}.",
+            )
 
 
 def add_event(scenario: Scenario, event_type: RaceEventType, message: str) -> None:
@@ -564,6 +584,8 @@ def add_event(scenario: Scenario, event_type: RaceEventType, message: str) -> No
 
 
 def set_collision_escape(boat: Boat, other: Boat, scenario: Scenario) -> None:
+    from sailing_simulator.domain.wind import wind_at
+
     if boat.control_mode != BoatControlMode.AI:
         return
     if scenario.race_state.elapsed_seconds < boat.ai_collision_escape_until_seconds:
@@ -572,8 +594,17 @@ def set_collision_escape(boat: Boat, other: Boat, scenario: Scenario) -> None:
     away_heading = bearing_to(other.position, boat.position)
     if distance(boat.position, other.position) < 1e-6:
         away_heading = normalize_degrees(boat.heading_degrees + 90.0)
-    boat.ai_collision_escape_heading = away_heading
-    boat.ai_collision_escape_until_seconds = scenario.race_state.elapsed_seconds + AI_COLLISION_ESCAPE_SECONDS
+    target_position = ai_target_position(boat, scenario)
+    wind_direction, _ = wind_at(scenario, boat.position)
+    leg_mode = ai_leg_mode(wind_direction, bearing_to(boat.position, target_position))
+    first_heading = ai_board_heading(wind_direction, leg_mode, 1)
+    second_heading = ai_board_heading(wind_direction, leg_mode, -1)
+    first_alignment = math.cos(math.radians(signed_angle(first_heading, away_heading)))
+    second_alignment = math.cos(math.radians(signed_angle(second_heading, away_heading)))
+    boat.ai_board = 1 if first_alignment >= second_alignment else -1
+    boat.ai_board_target_leg_index = boat.target_leg_index
+    boat.ai_collision_escape_heading = ai_board_heading(wind_direction, leg_mode, boat.ai_board)
+    boat.ai_collision_escape_until_seconds = scenario.race_state.elapsed_seconds + collision_escape_duration(boat, other, scenario)
     boat.ai_last_maneuver_seconds = boat.ai_collision_escape_until_seconds
 
 
@@ -626,9 +657,9 @@ def mark_rounding_parameter(
     if target is None:
         return None
 
-    incoming_unit = incoming_leg_unit_for(scenario, target_leg_index)
+    side_unit = rounding_boat_side_unit(scenario, target_leg_index)
     gate_unit = mark_rounding_gate_unit_for(scenario, target_leg_index)
-    if incoming_unit is None or gate_unit is None:
+    if side_unit is None or gate_unit is None:
         return mark_crossing_parameter(target.position, segment_start, segment_end, MARK_COLLISION_RADIUS)
 
     start_advance = dot(Vector2(segment_start.x - target.position.x, segment_start.y - target.position.y), gate_unit)
@@ -646,8 +677,7 @@ def mark_rounding_parameter(
 
     crossing_point = point_at_parameter(segment_start, segment_end, parameter)
     target_to_crossing = Vector2(crossing_point.x - target.position.x, crossing_point.y - target.position.y)
-    side_offset = cross(target_to_crossing, incoming_unit)
-    if side_offset > 0.0 or abs(cross(target_to_crossing, gate_unit)) > MARK_ROUNDING_GATE_HALF_WIDTH:
+    if dot(target_to_crossing, side_unit) < 0.0 or abs(cross(target_to_crossing, gate_unit)) > MARK_ROUNDING_GATE_HALF_WIDTH:
         return None
     return parameter
 
@@ -696,8 +726,31 @@ def rounding_exit_target_position(scenario: Scenario, target_leg_index: int) -> 
     return start_line_center(scenario)
 
 
+def rounding_boat_side_unit(scenario: Scenario, target_leg_index: int) -> Vector2 | None:
+    rounding_exit_unit = outgoing_leg_unit_for(scenario, target_leg_index)
+    if rounding_exit_unit is not None:
+        return port_rounding_boat_side(rounding_exit_unit)
+
+    incoming_unit = incoming_leg_unit_for(scenario, target_leg_index)
+    if incoming_unit is None:
+        return None
+    return port_rounding_boat_side(incoming_unit)
+
+
 def port_rounding_boat_side(incoming_unit: Vector2) -> Vector2:
     return Vector2(-incoming_unit.y, incoming_unit.x)
+
+
+def collision_escape_duration(boat: Boat, other: Boat, scenario: Scenario) -> float:
+    seed = (
+        int(scenario.race_state.elapsed_seconds * 1000.0)
+        + int(boat.position.x * 11.0 + boat.position.y * 17.0)
+        + int(other.position.x * 23.0 + other.position.y * 29.0)
+        + sum(ord(character) for character in boat.name)
+        + sum(ord(character) * 3 for character in other.name)
+    )
+    generator = random.Random(seed)
+    return generator.uniform(AI_COLLISION_ESCAPE_MIN_SECONDS, AI_COLLISION_ESCAPE_MAX_SECONDS)
 
 
 def leg_origin_for(scenario: Scenario, target_leg_index: int) -> Vector2:
@@ -715,6 +768,27 @@ def start_line_center(scenario: Scenario) -> Vector2:
     return Vector2(
         (start.pin.x + start.committee_boat.x) * 0.5,
         (start.pin.y + start.committee_boat.y) * 0.5,
+    )
+
+
+def start_finish_line_crossing_parameter(scenario: Scenario, segment_start: Vector2, segment_end: Vector2) -> float | None:
+    line_start, line_end = extended_start_finish_line(scenario)
+    return segment_intersection_parameter(segment_start, segment_end, line_start, line_end)
+
+
+def extended_start_finish_line(scenario: Scenario) -> tuple[Vector2, Vector2]:
+    start = scenario.course.start_line
+    dx = start.committee_boat.x - start.pin.x
+    dy = start.committee_boat.y - start.pin.y
+    length = math.hypot(dx, dy)
+    if length < 1e-9:
+        return start.pin, start.committee_boat
+
+    extension_x = dx / length * START_FINISH_LINE_EXTENSION
+    extension_y = dy / length * START_FINISH_LINE_EXTENSION
+    return (
+        Vector2(start.pin.x - extension_x, start.pin.y - extension_y),
+        Vector2(start.committee_boat.x + extension_x, start.committee_boat.y + extension_y),
     )
 
 
