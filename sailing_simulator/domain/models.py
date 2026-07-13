@@ -89,6 +89,7 @@ class Boat:
     has_started: bool = False
     is_finished: bool = False
     finish_time_seconds: float | None = None
+    mark_approach_target_leg_index: int = -1
     collision_stop_heading: float | None = None
     collision_released_heading: float | None = None
     ai_board: int | None = None
