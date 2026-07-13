@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -74,7 +76,8 @@ class MainWindow(QMainWindow):
     def _build_control_panel(self) -> QWidget:
         panel = QFrame()
         panel.setFrameShape(QFrame.Shape.StyledPanel)
-        panel.setFixedWidth(320)
+        panel.setMinimumWidth(340)
+        panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(14, 14, 14, 14)
@@ -92,18 +95,21 @@ class MainWindow(QMainWindow):
             self.format_combo.addItem(race_format.value, race_format.value)
         self.format_combo.setCurrentText(self.scenario.course.race_format.value)
         self.format_combo.currentIndexChanged.connect(self._on_course_format_changed)
+        self._stabilize_control(self.format_combo)
         form.addRow("Race format", self.format_combo)
 
         self.boat_count = QSpinBox()
         self.boat_count.setRange(1, 40)
         self.boat_count.setValue(len(self.scenario.boats))
         self.boat_count.valueChanged.connect(self._on_boat_count_changed)
+        self._stabilize_control(self.boat_count)
         form.addRow("Boats", self.boat_count)
 
         self.wind_mode = QComboBox()
         for mode in WindMode:
             self.wind_mode.addItem(mode.value.replace("_", " ").title(), mode.value)
         self.wind_mode.currentIndexChanged.connect(self._update_scenario_from_controls)
+        self._stabilize_control(self.wind_mode)
         form.addRow("Wind mode", self.wind_mode)
 
         self.wind_strength = QDoubleSpinBox()
@@ -111,6 +117,7 @@ class MainWindow(QMainWindow):
         self.wind_strength.setSuffix(" kt")
         self.wind_strength.setValue(self.scenario.wind_model.base_speed_knots)
         self.wind_strength.valueChanged.connect(self._update_scenario_from_controls)
+        self._stabilize_control(self.wind_strength)
         form.addRow("Base wind", self.wind_strength)
 
         self.wind_direction = QDoubleSpinBox()
@@ -118,6 +125,7 @@ class MainWindow(QMainWindow):
         self.wind_direction.setSuffix(" deg")
         self.wind_direction.setValue(self.scenario.wind_model.base_direction_degrees)
         self.wind_direction.valueChanged.connect(self._update_scenario_from_controls)
+        self._stabilize_control(self.wind_direction)
         form.addRow("Wind from", self.wind_direction)
 
         self.oscillation_amplitude = QDoubleSpinBox()
@@ -125,6 +133,7 @@ class MainWindow(QMainWindow):
         self.oscillation_amplitude.setSuffix(" deg")
         self.oscillation_amplitude.setValue(self.scenario.wind_model.oscillation_amplitude_degrees)
         self.oscillation_amplitude.valueChanged.connect(self._update_scenario_from_controls)
+        self._stabilize_control(self.oscillation_amplitude)
         form.addRow("Oscillation", self.oscillation_amplitude)
 
         self.oscillation_period = QDoubleSpinBox()
@@ -132,6 +141,7 @@ class MainWindow(QMainWindow):
         self.oscillation_period.setSuffix(" s")
         self.oscillation_period.setValue(self.scenario.wind_model.oscillation_period_seconds)
         self.oscillation_period.valueChanged.connect(self._update_scenario_from_controls)
+        self._stabilize_control(self.oscillation_period)
         form.addRow("Osc period", self.oscillation_period)
 
         self.persistent_shift = QDoubleSpinBox()
@@ -139,6 +149,7 @@ class MainWindow(QMainWindow):
         self.persistent_shift.setSuffix(" deg/min")
         self.persistent_shift.setValue(self.scenario.wind_model.persistent_shift_degrees_per_minute)
         self.persistent_shift.valueChanged.connect(self._update_scenario_from_controls)
+        self._stabilize_control(self.persistent_shift)
         form.addRow("Shift rate", self.persistent_shift)
 
         self.gust_percent = QDoubleSpinBox()
@@ -146,6 +157,7 @@ class MainWindow(QMainWindow):
         self.gust_percent.setSuffix(" %")
         self.gust_percent.setValue(self.scenario.wind_model.gust_percent)
         self.gust_percent.valueChanged.connect(self._update_scenario_from_controls)
+        self._stabilize_control(self.gust_percent)
         form.addRow("Gusts", self.gust_percent)
 
         self.time_scale = QDoubleSpinBox()
@@ -155,6 +167,7 @@ class MainWindow(QMainWindow):
         self.time_scale.setSuffix("x")
         self.time_scale.setValue(self.scenario.race_state.time_scale)
         self.time_scale.valueChanged.connect(self._update_scenario_from_controls)
+        self._stabilize_control(self.time_scale)
         form.addRow("Sim speed", self.time_scale)
 
         layout.addLayout(form)
@@ -209,6 +222,8 @@ class MainWindow(QMainWindow):
             "Current leg: pre-start"
         )
         self.status.setStyleSheet("font-family: Consolas, monospace;")
+        self.status.setMinimumWidth(0)
+        self.status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.status)
 
         layout.addWidget(self._section_label("Course Progress"))
@@ -229,12 +244,23 @@ class MainWindow(QMainWindow):
         note.setStyleSheet("color: #536471;")
         layout.addWidget(note)
 
-        return panel
+        scroll = QScrollArea()
+        scroll.setWidget(panel)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setFixedWidth(360)
+        scroll.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        return scroll
 
     def _section_label(self, text: str) -> QLabel:
         label = QLabel(text)
         label.setStyleSheet("font-size: 14px; font-weight: 600; margin-top: 8px;")
         return label
+
+    def _stabilize_control(self, control: QWidget) -> None:
+        control.setMinimumWidth(170)
+        control.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
         if event.isAutoRepeat():
