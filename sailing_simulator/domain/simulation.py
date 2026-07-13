@@ -131,18 +131,15 @@ def ai_steering_target_position(boat: Boat, scenario: Scenario) -> Vector2:
     if target is None:
         return ai_finish_target_position_for_boat(boat, scenario)
 
-    origin = leg_origin_for(scenario, target_index)
-    leg = Vector2(target.position.x - origin.x, target.position.y - origin.y)
-    leg_length = math.hypot(leg.x, leg.y)
-    if leg_length < 1e-9:
+    incoming_unit = incoming_leg_unit_for(scenario, target_index)
+    gate_unit = mark_rounding_gate_unit_for(scenario, target_index)
+    if incoming_unit is None or gate_unit is None:
         return target.position
 
-    unit = Vector2(leg.x / leg_length, leg.y / leg_length)
-    perpendicular = Vector2(-unit.y, unit.x)
-    side = boat.ai_board or 1
+    side = port_rounding_boat_side(incoming_unit)
     return Vector2(
-        target.position.x + unit.x * AI_MARK_ROUNDING_ADVANCE + perpendicular.x * AI_MARK_ROUNDING_OFFSET * side,
-        target.position.y + unit.y * AI_MARK_ROUNDING_ADVANCE + perpendicular.y * AI_MARK_ROUNDING_OFFSET * side,
+        target.position.x + gate_unit.x * AI_MARK_ROUNDING_ADVANCE + side.x * AI_MARK_ROUNDING_OFFSET,
+        target.position.y + gate_unit.y * AI_MARK_ROUNDING_ADVANCE + side.y * AI_MARK_ROUNDING_OFFSET,
     )
 
 
@@ -605,15 +602,13 @@ def mark_rounding_parameter(
     if target is None:
         return None
 
-    origin = leg_origin_for(scenario, target_leg_index)
-    leg = Vector2(target.position.x - origin.x, target.position.y - origin.y)
-    leg_length = math.hypot(leg.x, leg.y)
-    if leg_length < 1e-9:
+    incoming_unit = incoming_leg_unit_for(scenario, target_leg_index)
+    gate_unit = mark_rounding_gate_unit_for(scenario, target_leg_index)
+    if incoming_unit is None or gate_unit is None:
         return mark_crossing_parameter(target.position, segment_start, segment_end, MARK_COLLISION_RADIUS)
 
-    unit = Vector2(leg.x / leg_length, leg.y / leg_length)
-    start_advance = dot(Vector2(segment_start.x - target.position.x, segment_start.y - target.position.y), unit)
-    end_advance = dot(Vector2(segment_end.x - target.position.x, segment_end.y - target.position.y), unit)
+    start_advance = dot(Vector2(segment_start.x - target.position.x, segment_start.y - target.position.y), gate_unit)
+    end_advance = dot(Vector2(segment_end.x - target.position.x, segment_end.y - target.position.y), gate_unit)
     if start_advance >= MARK_ROUNDING_ADVANCE_DISTANCE or end_advance < MARK_ROUNDING_ADVANCE_DISTANCE:
         return None
 
@@ -626,10 +621,59 @@ def mark_rounding_parameter(
         return None
 
     crossing_point = point_at_parameter(segment_start, segment_end, parameter)
-    side_offset = abs(cross(Vector2(crossing_point.x - target.position.x, crossing_point.y - target.position.y), unit))
-    if side_offset > MARK_ROUNDING_GATE_HALF_WIDTH:
+    target_to_crossing = Vector2(crossing_point.x - target.position.x, crossing_point.y - target.position.y)
+    side_offset = cross(target_to_crossing, incoming_unit)
+    if side_offset > 0.0 or abs(cross(target_to_crossing, gate_unit)) > MARK_ROUNDING_GATE_HALF_WIDTH:
         return None
     return parameter
+
+
+def incoming_leg_unit_for(scenario: Scenario, target_leg_index: int) -> Vector2 | None:
+    target = target_mark_for(scenario.course, target_leg_index)
+    if target is None:
+        return None
+
+    origin = leg_origin_for(scenario, target_leg_index)
+    leg = Vector2(target.position.x - origin.x, target.position.y - origin.y)
+    leg_length = math.hypot(leg.x, leg.y)
+    if leg_length < 1e-9:
+        return None
+    return Vector2(leg.x / leg_length, leg.y / leg_length)
+
+
+def outgoing_leg_unit_for(scenario: Scenario, target_leg_index: int) -> Vector2 | None:
+    target = target_mark_for(scenario.course, target_leg_index)
+    exit_target = rounding_exit_target_position(scenario, target_leg_index)
+    if target is None or exit_target is None:
+        return None
+
+    leg = Vector2(exit_target.x - target.position.x, exit_target.y - target.position.y)
+    leg_length = math.hypot(leg.x, leg.y)
+    if leg_length < 1e-9:
+        return None
+    return Vector2(leg.x / leg_length, leg.y / leg_length)
+
+
+def mark_rounding_gate_unit_for(scenario: Scenario, target_leg_index: int) -> Vector2 | None:
+    target = target_mark_for(scenario.course, target_leg_index)
+    if target is None:
+        return None
+    if target.mark_type in {MarkType.WINDWARD, MarkType.LEEWARD}:
+        return Vector2(0.0, -1.0)
+    return outgoing_leg_unit_for(scenario, target_leg_index)
+
+
+def rounding_exit_target_position(scenario: Scenario, target_leg_index: int) -> Vector2 | None:
+    next_target = target_mark_for(scenario.course, target_leg_index + 1)
+    if next_target is not None:
+        return next_target.position
+    if scenario.course.race_format == RaceFormat.T3:
+        return finish_position_for(scenario.course)
+    return start_line_center(scenario)
+
+
+def port_rounding_boat_side(incoming_unit: Vector2) -> Vector2:
+    return Vector2(-incoming_unit.y, incoming_unit.x)
 
 
 def leg_origin_for(scenario: Scenario, target_leg_index: int) -> Vector2:

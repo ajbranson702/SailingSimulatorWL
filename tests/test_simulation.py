@@ -152,7 +152,7 @@ def test_default_ai_fleet_rounds_and_finishes_without_hitting_marks():
     scenario = default_scenario()
     mark_hits = []
 
-    for _ in range(900):
+    for _ in range(1100):
         step_scenario(scenario, 1.0)
         mark_hits.extend(
             event.message for event in scenario.race_state.events if event.event_type == RaceEventType.MARK_COLLISION
@@ -188,8 +188,8 @@ def test_mark_rounding_advances_target_leg():
     boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
     boat.has_started = True
     windward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.WINDWARD)
-    previous = Vector2(windward.position.x, windward.position.y + 80.0)
-    boat.position = Vector2(windward.position.x, windward.position.y - 10.0)
+    previous = Vector2(windward.position.x + 40.0, windward.position.y + 20.0)
+    boat.position = Vector2(windward.position.x + 40.0, windward.position.y - 20.0)
 
     detect_race_events(scenario, {boat.name: previous})
 
@@ -211,18 +211,64 @@ def test_touching_mark_without_passing_rounding_gate_does_not_advance_leg():
     assert not any(event.event_type == RaceEventType.MARK_ROUNDED for event in scenario.race_state.events)
 
 
+def test_starboard_rounding_side_does_not_advance_leg():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    windward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.WINDWARD)
+    previous = Vector2(windward.position.x - 40.0, windward.position.y + 20.0)
+    boat.position = Vector2(windward.position.x - 40.0, windward.position.y - 20.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.target_leg_index == 0
+    assert not any(event.event_type == RaceEventType.MARK_ROUNDED for event in scenario.race_state.events)
+
+
 def test_mark_rounding_advances_when_boat_passes_through_mark_radius_between_ticks():
     scenario = default_scenario()
     boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
     boat.has_started = True
     windward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.WINDWARD)
-    previous = Vector2(windward.position.x, windward.position.y + 80.0)
-    boat.position = Vector2(windward.position.x, windward.position.y - 80.0)
+    previous = Vector2(windward.position.x + 40.0, windward.position.y + 80.0)
+    boat.position = Vector2(windward.position.x + 40.0, windward.position.y - 80.0)
 
     detect_race_events(scenario, {boat.name: previous})
 
     assert boat.target_leg_index == 1
     assert any(event.event_type == RaceEventType.MARK_ROUNDED for event in scenario.race_state.events)
+
+
+def test_leeward_port_rounding_requires_upwind_exit():
+    scenario = default_scenario()
+    scenario.course = course_for_format(RaceFormat.W4)
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    boat.target_leg_index = 1
+    leeward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
+    previous = Vector2(leeward.position.x - 40.0, leeward.position.y + 20.0)
+    boat.position = Vector2(leeward.position.x - 40.0, leeward.position.y - 20.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.target_leg_index == 2
+    assert any(event.event_type == RaceEventType.MARK_ROUNDED for event in scenario.race_state.events)
+
+
+def test_leeward_downwind_exit_does_not_round():
+    scenario = default_scenario()
+    scenario.course = course_for_format(RaceFormat.W4)
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    boat.target_leg_index = 1
+    leeward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
+    previous = Vector2(leeward.position.x - 40.0, leeward.position.y - 20.0)
+    boat.position = Vector2(leeward.position.x - 40.0, leeward.position.y + 20.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.target_leg_index == 1
+    assert not any(event.event_type == RaceEventType.MARK_ROUNDED for event in scenario.race_state.events)
 
 
 def test_finish_crossing_only_counts_after_required_marks():
@@ -263,8 +309,8 @@ def test_w_course_does_not_finish_at_leeward_mark_before_sequence_complete():
     boat.has_started = True
     boat.target_leg_index = 1
     leeward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
-    previous = Vector2(leeward.position.x, leeward.position.y - 80.0)
-    boat.position = Vector2(leeward.position.x, leeward.position.y + 80.0)
+    previous = Vector2(leeward.position.x - 40.0, leeward.position.y + 20.0)
+    boat.position = Vector2(leeward.position.x - 40.0, leeward.position.y - 20.0)
 
     detect_race_events(scenario, {boat.name: previous})
 
@@ -295,8 +341,8 @@ def test_progress_can_round_last_mark_then_finish_on_line():
     boat.has_started = True
     windward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.WINDWARD)
 
-    previous = Vector2(windward.position.x, windward.position.y + 80.0)
-    boat.position = Vector2(windward.position.x, windward.position.y - 10.0)
+    previous = Vector2(windward.position.x + 40.0, windward.position.y + 20.0)
+    boat.position = Vector2(windward.position.x + 40.0, windward.position.y - 20.0)
     detect_race_events(scenario, {boat.name: previous})
 
     assert boat.target_leg_index == 1
