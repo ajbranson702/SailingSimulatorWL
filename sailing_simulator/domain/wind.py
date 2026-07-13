@@ -83,20 +83,21 @@ def apply_single_terrain_effect(
     downwind_distance = dx * downwind.x + dy * downwind.y
     lateral_distance = dx * side.x + dy * side.y
 
-    if downwind_distance < 0.0 or downwind_distance > radius * 2.25:
+    shadow_length = radius * 3.5
+    if downwind_distance < 0.0 or downwind_distance > shadow_length:
         return direction_degrees, speed_knots
-    if abs(lateral_distance) > radius:
+    if abs(lateral_distance) > radius * 1.35:
         return direction_degrees, speed_knots
 
     type_factor = terrain_type_factor(terrain.terrain_type)
     height_factor = max(0.0, min(1.0, terrain.height / 100.0))
-    downwind_fade = 1.0 - downwind_distance / (radius * 2.25)
-    lateral_fade = 1.0 - abs(lateral_distance) / radius
+    downwind_fade = 1.0 - downwind_distance / shadow_length
+    lateral_fade = 1.0 - abs(lateral_distance) / (radius * 1.35)
     influence = max(0.0, downwind_fade * lateral_fade * height_factor * type_factor)
 
-    speed_reduction = min(0.75, influence * 0.65)
-    deflection = math.copysign(18.0 * influence, lateral_distance if abs(lateral_distance) > 1e-9 else 1.0)
-    turbulence = math.sin((position.x + position.y) / 55.0) * 4.0 * influence
+    speed_reduction = min(0.88, influence * 0.82)
+    deflection = math.copysign(38.0 * influence, lateral_distance if abs(lateral_distance) > 1e-9 else 1.0)
+    turbulence = math.sin((position.x + position.y) / 46.0) * 7.0 * influence
     return normalize_degrees(direction_degrees + deflection + turbulence), speed_knots * (1.0 - speed_reduction)
 
 

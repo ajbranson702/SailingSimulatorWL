@@ -126,8 +126,8 @@ class WindModel:
 
 @dataclass
 class WindField:
-    columns: int = 9
-    rows: int = 9
+    columns: int = 13
+    rows: int = 10
     cell_size: float = 100.0
     cells: list[WindCell] = field(default_factory=list)
 

@@ -97,18 +97,36 @@ class CourseCanvas(QWidget):
         if len(field.cells) != field.columns * field.rows:
             update_wind_field(self.scenario)
 
+        speeds = [cell.speed_knots for cell in field.cells]
+        minimum_speed = min(speeds, default=0.0)
+        maximum_speed = max(speeds, default=0.0)
+        speed_range = max(maximum_speed - minimum_speed, 0.1)
+
         for cell in field.cells:
             center = self._to_screen(cell.center, rect)
-            length = 9.0 + min(cell.speed_knots, 25.0) * 0.7
+            speed_ratio = (cell.speed_knots - minimum_speed) / speed_range
+            absolute_ratio = min(cell.speed_knots / 20.0, 1.0)
+            length = 8.0 + absolute_ratio * 12.0 + speed_ratio * 18.0
+            pen_width = 1.0 + speed_ratio * 1.6
             radians = math.radians(cell.direction_degrees + 180.0)
             end = QPointF(center.x() + math.sin(radians) * length, center.y() - math.cos(radians) * length)
             start = QPointF(center.x() - math.sin(radians) * length * 0.45, center.y() + math.cos(radians) * length * 0.45)
-            alpha = max(75, min(210, int(70 + cell.speed_knots * 8)))
-            color = QColor("#2d8aa8")
+            alpha = max(80, min(235, int(95 + speed_ratio * 120)))
+            color = self._wind_arrow_color(speed_ratio)
             color.setAlpha(alpha)
-            painter.setPen(QPen(color, 1.4))
+            painter.setPen(QPen(color, pen_width))
             painter.drawLine(start, end)
-            self._draw_arrow_head(painter, end, radians, color)
+            self._draw_arrow_head(painter, end, radians, color, 6.0 + speed_ratio * 4.0)
+
+    def _wind_arrow_color(self, speed_ratio: float) -> QColor:
+        low = QColor("#6ba6b6")
+        high = QColor("#116f90")
+        ratio = max(0.0, min(1.0, speed_ratio))
+        return QColor(
+            int(low.red() + (high.red() - low.red()) * ratio),
+            int(low.green() + (high.green() - low.green()) * ratio),
+            int(low.blue() + (high.blue() - low.blue()) * ratio),
+        )
 
     def _draw_course_objects(self, painter: QPainter, rect: QRectF) -> None:
         start = self.scenario.course.start_line
@@ -228,14 +246,14 @@ class CourseCanvas(QWidget):
         relative_wind = self._normalize_degrees(wind_from - boat.heading_degrees)
         return -1 if relative_wind >= 0 else 1
 
-    def _draw_arrow_head(self, painter: QPainter, end: QPointF, radians: float, color: QColor) -> None:
+    def _draw_arrow_head(self, painter: QPainter, end: QPointF, radians: float, color: QColor, size: float = 7.0) -> None:
         left = QPointF(
-            end.x() - math.sin(radians + 0.55) * 7.0,
-            end.y() + math.cos(radians + 0.55) * 7.0,
+            end.x() - math.sin(radians + 0.55) * size,
+            end.y() + math.cos(radians + 0.55) * size,
         )
         right = QPointF(
-            end.x() - math.sin(radians - 0.55) * 7.0,
-            end.y() + math.cos(radians - 0.55) * 7.0,
+            end.x() - math.sin(radians - 0.55) * size,
+            end.y() + math.cos(radians - 0.55) * size,
         )
         painter.setBrush(color)
         painter.drawPolygon(QPolygonF([end, left, right]))

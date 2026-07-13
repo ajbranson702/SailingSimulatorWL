@@ -73,8 +73,8 @@ def test_terrain_reduces_and_bends_downwind_airflow():
 
     direction, speed = wind_at(scenario, Vector2(510.0, 390.0))
 
-    assert speed < 10.0
-    assert direction != 0.0
+    assert speed < 8.5
+    assert abs(direction) > 8.0
 
 
 def test_terrain_upwind_of_object_does_not_change_airflow():
@@ -94,3 +94,10 @@ def test_terrain_upwind_of_object_does_not_change_airflow():
 
     assert direction == 0.0
     assert speed == 10.0
+
+
+def test_default_wind_field_has_dense_visual_grid():
+    scenario = default_scenario()
+
+    assert scenario.wind_field.columns == 13
+    assert scenario.wind_field.rows == 10
