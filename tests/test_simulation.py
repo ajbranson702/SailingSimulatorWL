@@ -206,6 +206,34 @@ def test_ai_targets_t3_start_finish_line_after_required_marks_are_complete():
     assert ai_target_position(ai_boat, scenario) == Vector2(555.0, 700.0)
 
 
+def test_ai_steers_directly_on_reaching_leg():
+    scenario = default_scenario()
+    scenario.course = course_for_format(RaceFormat.T3)
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    gybe = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.GYBE)
+    ai_boat.has_started = True
+    ai_boat.target_leg_index = 1
+    ai_boat.position = Vector2(gybe.position.x + 220.0, gybe.position.y)
+    ai_boat.heading_degrees = 90.0
+
+    step_scenario(scenario, 1.0)
+
+    assert ai_boat.heading_degrees > 90.0
+
+
+def test_ai_fleet_completes_t3_course():
+    scenario = default_scenario()
+    scenario.course = course_for_format(RaceFormat.T3)
+    reset_boats_to_start(scenario)
+
+    for _ in range(2500):
+        step_scenario(scenario, 1.0)
+
+    ai_boats = [boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI]
+    assert all(boat.target_leg_index == 3 for boat in ai_boats)
+    assert all(boat.is_finished for boat in ai_boats)
+
+
 def test_default_ai_fleet_rounds_and_finishes_without_hitting_marks():
     scenario = default_scenario()
 

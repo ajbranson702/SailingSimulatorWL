@@ -77,6 +77,22 @@ def update_ai_heading(boat: Boat, scenario: Scenario) -> None:
     target_position = ai_target_position(boat, scenario)
     wind_direction, wind_speed = wind_at(scenario, boat.position)
     leg_mode = ai_leg_mode(wind_direction, bearing_to(boat.position, target_position))
+    steering_target = ai_steering_target_position(boat, scenario)
+    if leg_mode == "reach" and boat.collision_stop_heading is None:
+        if (
+            boat.ai_board is not None
+            and scenario.race_state.elapsed_seconds - boat.ai_last_maneuver_seconds >= AI_MIN_MANEUVER_INTERVAL_SECONDS
+            and ai_board_near_boundary(boat, scenario, wind_direction, leg_mode)
+        ):
+            boat.ai_board = -boat.ai_board
+            boat.ai_last_maneuver_seconds = scenario.race_state.elapsed_seconds
+            desired_heading = ai_board_heading(wind_direction, leg_mode, boat.ai_board)
+        else:
+            desired_heading = best_vmg_heading(boat, scenario, steering_target)
+        boat.heading_degrees = turn_toward_heading(boat.heading_degrees, desired_heading, 18.0)
+        release_collision_stop_if_heading_changed(boat)
+        return
+
     reset_ai_board_if_needed(boat, scenario, target_position, leg_mode, wind_direction, wind_speed)
     if boat.collision_stop_heading is not None:
         boat.ai_board = -boat.ai_board if boat.ai_board is not None else best_ai_board(
@@ -89,7 +105,6 @@ def update_ai_heading(boat: Boat, scenario: Scenario) -> None:
         )
         boat.ai_last_maneuver_seconds = scenario.race_state.elapsed_seconds
 
-    steering_target = ai_steering_target_position(boat, scenario)
     if boat.collision_stop_heading is None and (
         distance(boat.position, target_position) <= AI_CLOSE_TARGET_RADIUS
         or boat.mark_approach_target_leg_index == boat.target_leg_index
@@ -321,6 +336,8 @@ def should_change_ai_board(
 
 def ai_leg_mode(wind_direction: float, target_bearing: float) -> str:
     relative_to_wind = abs(signed_angle(wind_direction, target_bearing))
+    if 50.0 <= relative_to_wind <= 130.0:
+        return "reach"
     return "downwind" if relative_to_wind > 100.0 else "upwind"
 
 
