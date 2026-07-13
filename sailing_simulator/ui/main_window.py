@@ -57,6 +57,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.scenario = default_scenario()
+        self.selected_terrain_index: int | None = None
         self._timer = QTimer(self)
         self._timer.setInterval(100)
         self._timer.timeout.connect(self._step_simulation)
@@ -77,6 +78,7 @@ class MainWindow(QMainWindow):
         self.canvas = CourseCanvas(self.scenario)
         self.canvas.scenario_changed.connect(self._on_canvas_changed)
         self.canvas.key_pressed.connect(self._handle_key)
+        self.canvas.terrain_selected.connect(self._on_terrain_selected)
         layout.addWidget(self.canvas, 1)
         layout.addWidget(self._build_control_panel())
 
@@ -285,7 +287,7 @@ class MainWindow(QMainWindow):
 
         layout.addStretch(1)
 
-        note = QLabel("Before starting, drag boats, marks, or start-line endpoints on the course canvas.")
+        note = QLabel("Before starting, drag boats, terrain, marks, or start-line endpoints on the course canvas.")
         note.setWordWrap(True)
         note.setStyleSheet("color: #536471;")
         layout.addWidget(note)
@@ -392,6 +394,7 @@ class MainWindow(QMainWindow):
 
         self.scenario = load_scenario(path)
         self.canvas.set_scenario(self.scenario)
+        self._set_selected_terrain_index(0 if self.scenario.terrain else None)
         self._refresh_controls_from_scenario()
         self.statusBar().showMessage(f"Loaded scenario from {path}")
 
@@ -400,6 +403,14 @@ class MainWindow(QMainWindow):
         self._refresh_terrain_controls()
         self._refresh_boat_status()
         self.statusBar().showMessage("Scenario layout updated")
+
+    def _on_terrain_selected(self, index: int) -> None:
+        self._set_selected_terrain_index(index if index >= 0 else None)
+        self._refresh_terrain_controls()
+        if self.selected_terrain_index is None:
+            self.statusBar().showMessage("Terrain selection cleared")
+        else:
+            self.statusBar().showMessage(f"Selected terrain {self.selected_terrain_index + 1}")
 
     def _on_boat_count_changed(self, count: int) -> None:
         self._set_boat_count(count)
@@ -461,6 +472,8 @@ class MainWindow(QMainWindow):
         self.gust_percent.setValue(self.scenario.wind_model.gust_percent)
         self.time_scale.setValue(self.scenario.race_state.time_scale)
         self._refresh_course_controls()
+        if self._selected_terrain() is None:
+            self._set_selected_terrain_index(None)
         self._refresh_terrain_controls()
         self._refresh_boat_status()
 
@@ -486,9 +499,18 @@ class MainWindow(QMainWindow):
         self.terrain_radius.blockSignals(False)
 
     def _selected_terrain(self) -> TerrainObject | None:
-        if not self.scenario.terrain:
+        if self.selected_terrain_index is None:
             return None
-        return self.scenario.terrain[-1]
+        if not 0 <= self.selected_terrain_index < len(self.scenario.terrain):
+            return None
+        return self.scenario.terrain[self.selected_terrain_index]
+
+    def _set_selected_terrain_index(self, index: int | None) -> None:
+        if index is None or index < 0 or index >= len(self.scenario.terrain):
+            self.selected_terrain_index = None
+        else:
+            self.selected_terrain_index = index
+        self.canvas.select_terrain(self.selected_terrain_index)
 
     def _add_terrain(self) -> None:
         terrain = TerrainObject(
@@ -498,15 +520,19 @@ class MainWindow(QMainWindow):
             influence_radius=self.terrain_radius.value(),
         )
         self.scenario.terrain.append(terrain)
+        self._set_selected_terrain_index(len(self.scenario.terrain) - 1)
         update_wind_field(self.scenario)
         self.canvas.update()
         self._refresh_terrain_controls()
         self.statusBar().showMessage("Terrain added")
 
     def _delete_selected_terrain(self) -> None:
-        if not self.scenario.terrain:
+        if self.selected_terrain_index is None or not 0 <= self.selected_terrain_index < len(self.scenario.terrain):
             return
-        self.scenario.terrain.pop()
+        deleted_index = self.selected_terrain_index
+        self.scenario.terrain.pop(deleted_index)
+        next_index = min(deleted_index, len(self.scenario.terrain) - 1) if self.scenario.terrain else None
+        self._set_selected_terrain_index(next_index)
         update_wind_field(self.scenario)
         self.canvas.update()
         self._refresh_terrain_controls()

@@ -20,17 +20,27 @@ class DragTarget:
 class CourseCanvas(QWidget):
     scenario_changed = Signal()
     key_pressed = Signal(int)
+    terrain_selected = Signal(int)
 
     def __init__(self, scenario: Scenario, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.scenario = scenario
         self._drag_target: DragTarget | None = None
+        self.selected_terrain_index: int | None = None
         self.setMinimumSize(760, 720)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     def set_scenario(self, scenario: Scenario) -> None:
         self.scenario = scenario
         self._drag_target = None
+        self.selected_terrain_index = None
+        self.update()
+
+    def select_terrain(self, index: int | None) -> None:
+        if index is None or index < 0 or index >= len(self.scenario.terrain):
+            self.selected_terrain_index = None
+        else:
+            self.selected_terrain_index = index
         self.update()
 
     def paintEvent(self, event) -> None:  # noqa: N802
@@ -57,9 +67,15 @@ class CourseCanvas(QWidget):
 
         target = self._hit_test(event.position())
         if target is None:
+            if self.selected_terrain_index is not None:
+                self.select_terrain(None)
+                self.terrain_selected.emit(-1)
             return
 
         self._drag_target = target
+        if target.kind == "terrain" and target.index is not None:
+            self.select_terrain(target.index)
+            self.terrain_selected.emit(target.index)
         self.setCursor(Qt.CursorShape.ClosedHandCursor)
         self._move_drag_target(event.position())
 
@@ -151,15 +167,20 @@ class CourseCanvas(QWidget):
             painter.drawText(center + QPointF(14, 5), mark.label)
 
     def _draw_terrain(self, painter: QPainter, rect: QRectF) -> None:
-        for terrain in self.scenario.terrain:
+        for index, terrain in enumerate(self.scenario.terrain):
             center = self._to_screen(terrain.position, rect)
             radius = (terrain.influence_radius / self.scenario.course.boundary_width) * rect.width()
             color = self._terrain_color(terrain.terrain_type)
             shadow = QColor(color)
             shadow.setAlpha(45)
-            painter.setPen(QPen(color.darker(125), 2))
+            is_selected = index == self.selected_terrain_index
+            painter.setPen(QPen(QColor("#1f6f8b") if is_selected else color.darker(125), 3 if is_selected else 2))
             painter.setBrush(shadow)
             painter.drawEllipse(center, radius, radius)
+            if is_selected:
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.setPen(QPen(QColor("#0f4c6a"), 2))
+                painter.drawEllipse(center, 18, 18)
             painter.setBrush(color)
             painter.drawEllipse(center, 13, 13)
             painter.setPen(QPen(QColor("#1f2933"), 1))

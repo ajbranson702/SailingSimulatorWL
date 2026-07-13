@@ -64,3 +64,21 @@ def test_terrain_can_be_dragged_on_canvas():
     assert scenario.terrain[0].position.y == pytest.approx(420.0)
 
     app.quit()
+
+
+def test_terrain_selection_is_tracked_on_canvas():
+    app = QApplication.instance() or QApplication([])
+    scenario = default_scenario()
+    scenario.terrain.append(TerrainObject(TerrainType.HILL, Vector2(250.0, 250.0), 45.0, 150.0))
+    scenario.terrain.append(TerrainObject(TerrainType.TREES, Vector2(500.0, 500.0), 35.0, 120.0))
+    canvas = CourseCanvas(scenario)
+
+    canvas.select_terrain(1)
+
+    assert canvas.selected_terrain_index == 1
+
+    canvas.select_terrain(5)
+
+    assert canvas.selected_terrain_index is None
+
+    app.quit()
