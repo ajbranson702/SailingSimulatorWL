@@ -101,6 +101,7 @@ class Boat:
     ai_collision_escape_until_seconds: float = 0.0
     ai_collision_escape_heading: float | None = None
     is_early_start: bool = False
+    ai_start_strategy: str | None = None
 
 
 @dataclass

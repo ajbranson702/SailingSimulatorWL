@@ -168,6 +168,7 @@ def boat_to_dict(boat: Boat) -> dict[str, Any]:
         "ai_collision_escape_until_seconds": boat.ai_collision_escape_until_seconds,
         "ai_collision_escape_heading": boat.ai_collision_escape_heading,
         "is_early_start": boat.is_early_start,
+        "ai_start_strategy": boat.ai_start_strategy,
     }
 
 
@@ -194,6 +195,7 @@ def boat_from_dict(data: dict[str, Any]) -> Boat:
         ai_collision_escape_until_seconds=float(data.get("ai_collision_escape_until_seconds", 0.0)),
         ai_collision_escape_heading=data.get("ai_collision_escape_heading"),
         is_early_start=bool(data.get("is_early_start", False)),
+        ai_start_strategy=data.get("ai_start_strategy"),
     )
 
 

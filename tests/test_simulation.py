@@ -15,6 +15,7 @@ from sailing_simulator.domain.simulation import (
     ai_board_heading,
     ai_board_near_boundary,
     ai_prestart_target_position_for_boat,
+    ai_start_strategy_for_boat,
     ai_steering_target_position,
     ai_target_position,
     bearing_to,
@@ -161,6 +162,28 @@ def test_ai_targets_prestart_side_during_countdown():
 
     assert target == prestart_target
     assert target.y > scenario.course.start_line.pin.y
+
+
+def test_ai_prestart_targets_move_along_line_over_time():
+    scenario = default_scenario()
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+
+    scenario.race_state.elapsed_seconds = -60.0
+    first_target = ai_prestart_target_position_for_boat(ai_boat, scenario)
+    scenario.race_state.elapsed_seconds = -45.0
+    second_target = ai_prestart_target_position_for_boat(ai_boat, scenario)
+
+    assert first_target.y == second_target.y
+    assert first_target.x != second_target.x
+
+
+def test_ai_boats_use_different_start_strategies():
+    scenario = default_scenario()
+    ai_boats = [boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI]
+
+    strategies = [ai_start_strategy_for_boat(boat, scenario) for boat in ai_boats]
+
+    assert strategies == ["middle", "committee"]
 
 
 def test_ai_targets_leeward_mark_before_w2_finish_line():

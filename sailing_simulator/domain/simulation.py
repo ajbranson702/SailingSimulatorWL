@@ -43,6 +43,7 @@ AI_COLLISION_ESCAPE_MIN_SECONDS = 10.0
 AI_COLLISION_ESCAPE_MAX_SECONDS = 28.0
 AI_UPWIND_ANGLE = 45.0
 AI_DOWNWIND_ANGLE = 35.0
+AI_START_STRATEGIES = ("middle", "committee", "pin", "port")
 
 
 def step_scenario(scenario: Scenario, elapsed_seconds: float) -> None:
@@ -67,6 +68,13 @@ def update_ai_heading(boat: Boat, scenario: Scenario) -> None:
 
     if boat.is_finished:
         boat.speed_knots = 0.0
+        return
+
+    if not boat.has_started and scenario.race_state.elapsed_seconds < 0.0:
+        target_position = ai_prestart_target_position_for_boat(boat, scenario)
+        desired_heading = best_vmg_heading(boat, scenario, target_position)
+        boat.heading_degrees = turn_toward_heading(boat.heading_degrees, desired_heading, 18.0)
+        release_collision_stop_if_heading_changed(boat)
         return
 
     if boat.ai_collision_escape_heading is not None:
@@ -294,20 +302,82 @@ def ai_prestart_target_position_for_boat(boat: Boat, scenario: Scenario) -> Vect
     line_unit = Vector2(dx / line_length, dy / line_length)
     center = start_line_center(scenario)
     prestart_side = prestart_side_unit(scenario)
+    strategy = ai_start_strategy_for_boat(boat, scenario)
     sequence_remaining = max(0.0, -scenario.race_state.elapsed_seconds)
-    depth = 42.0 if sequence_remaining <= 15.0 else 115.0
+
+    lane_fraction = ai_start_lane_fraction(strategy)
+    patrol_width = ai_start_patrol_width(strategy)
+    if sequence_remaining > 18.0:
+        lane_fraction += math.sin(ai_start_patrol_phase(boat, scenario)) * patrol_width
+    elif strategy == "port":
+        lane_fraction = -0.22
+
+    depth = ai_start_depth(strategy, sequence_remaining)
     if boat.is_early_start:
         depth = 150.0
 
-    fleet_index = scenario.boats.index(boat) if boat in scenario.boats else 0
-    fleet_count = max(1, len(scenario.boats))
-    spacing = min(80.0, max(35.0, line_length / (fleet_count + 1)))
-    along_offset = (fleet_index - (fleet_count - 1) * 0.5) * spacing
+    lane_fraction = max(-0.48, min(0.48, lane_fraction))
+    along_offset = lane_fraction * line_length
 
     return Vector2(
         center.x + line_unit.x * along_offset + prestart_side.x * depth,
         center.y + line_unit.y * along_offset + prestart_side.y * depth,
     )
+
+
+def ai_start_strategy_for_boat(boat: Boat, scenario: Scenario) -> str:
+    if boat.ai_start_strategy in AI_START_STRATEGIES:
+        return boat.ai_start_strategy
+
+    ai_boats = [candidate for candidate in scenario.boats if candidate.control_mode == BoatControlMode.AI]
+    index = ai_boats.index(boat) if boat in ai_boats else 0
+    boat.ai_start_strategy = AI_START_STRATEGIES[index % len(AI_START_STRATEGIES)]
+    return boat.ai_start_strategy
+
+
+def ai_start_lane_fraction(strategy: str) -> float:
+    lanes = {
+        "pin": -0.38,
+        "port": -0.44,
+        "middle": 0.0,
+        "committee": 0.36,
+    }
+    return lanes.get(strategy, 0.0)
+
+
+def ai_start_patrol_width(strategy: str) -> float:
+    widths = {
+        "pin": 0.16,
+        "port": 0.12,
+        "middle": 0.26,
+        "committee": 0.14,
+    }
+    return widths.get(strategy, 0.18)
+
+
+def ai_start_patrol_phase(boat: Boat, scenario: Scenario) -> float:
+    index = scenario.boats.index(boat) if boat in scenario.boats else 0
+    return scenario.race_state.elapsed_seconds / 8.0 + index * 1.7
+
+
+def ai_start_depth(strategy: str, sequence_remaining: float) -> float:
+    if strategy == "port":
+        if sequence_remaining > 35.0:
+            return 140.0
+        if sequence_remaining > 12.0:
+            return 86.0
+        return 34.0
+    if strategy == "committee":
+        if sequence_remaining > 35.0:
+            return 120.0
+        if sequence_remaining > 12.0:
+            return 76.0
+        return 30.0
+    if sequence_remaining > 35.0:
+        return 115.0
+    if sequence_remaining > 12.0:
+        return 70.0
+    return 32.0
 
 
 def best_vmg_heading(boat: Boat, scenario: Scenario, target_position: Vector2) -> float:
@@ -569,6 +639,7 @@ def reset_boats_to_start(scenario: Scenario) -> None:
         boat.ai_collision_escape_until_seconds = 0.0
         boat.ai_collision_escape_heading = None
         boat.is_early_start = False
+        boat.ai_start_strategy = None
     scenario.race_state.elapsed_seconds = 0.0
     scenario.race_state.events = []
     scenario.race_state.finished_boats = set()
