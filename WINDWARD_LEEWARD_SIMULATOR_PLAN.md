@@ -82,6 +82,7 @@ Later AI behavior:
 
 - React to oscillating shifts.
 - Avoid other boats.
+- Follow the Racing Rules of Sailing when deciding whether to hold course, keep clear, tack, gybe, or give mark-room.
 - Cover or split from competitors.
 - Choose lanes based on gusts, terrain effects, and laylines.
 
@@ -189,6 +190,43 @@ Later terrain model:
 - Layered terrain effects from multiple objects.
 - Presets for common sailing venues.
 
+## Racing Rules Of Sailing
+
+Rules behavior should be introduced after the core race simulator, AI routing, terrain, and packaging work are stable. The goal is not to replace a protest committee or implement every edge case immediately. The first rules phase should make common windward-leeward interactions realistic enough that AI and user maneuvers feel tactically credible.
+
+Initial rules scope:
+
+- Port/starboard right-of-way.
+- Windward/leeward right-of-way on the same tack.
+- Clear ahead / clear astern and overlap detection.
+- Tacking boat keeps clear while tacking.
+- Gybing boat keeps clear while gybing.
+- Avoiding-contact expectation when a collision is likely.
+- Mark-room at windward, leeward, gybe, and finish marks.
+- Basic room-to-tack behavior near course boundaries or obstructions.
+
+User-facing rules behavior:
+
+- Show right-of-way and keep-clear state for nearby boats.
+- Warn the user before a maneuver creates a likely foul.
+- Flag incidents after contact, failure to keep clear, or failure to give mark-room.
+- Allow a simple penalty turn or time penalty before adding full protest handling.
+
+AI rules behavior:
+
+- Prefer legal maneuvers over pure VMG decisions.
+- Avoid tacking into another boat's path.
+- Give mark-room when another boat is entitled to it.
+- Use tactical choices such as lee-bow, covering, and holding starboard only when rules allow.
+- Separate safely after incidents before resuming normal tactical routing.
+
+Later rules model:
+
+- Configurable rule strictness for training versus arcade-style experimentation.
+- Protest/incident log with involved boats, rule category, and timestamp.
+- Optional rules overlay showing zones, overlaps, and right-of-way relationships.
+- More complete Racing Rules of Sailing coverage as the simulator matures.
+
 ## Data Model
 
 Suggested core entities:
@@ -257,6 +295,7 @@ The build should be organized around phases rather than fixed calendar weeks. Th
 | 6 | Computer-controlled boats | User can race against AI boats |
 | 7 | Terrain wind effects | Terrain affects the visible wind grid |
 | 8 | Polish, packaging, and scenario library | Packaged Windows prototype is ready to use |
+| 9 | Racing rules and legal maneuvers | AI and user interactions follow core Racing Rules of Sailing concepts |
 
 ### Phase 1: Product Skeleton and Technical Foundation
 
@@ -348,6 +387,19 @@ Deliverable: user can add terrain and see it alter wind behavior.
 
 Deliverable: packaged Windows prototype ready for repeated experimentation.
 
+### Phase 9: Racing Rules and Legal Maneuvers
+
+- Add a rules engine that evaluates nearby boat relationships each simulation tick.
+- Detect port/starboard, windward/leeward, clear ahead/astern, and overlap states.
+- Add mark-room zones and determine which boats are entitled to room at each mark.
+- Prevent or discourage illegal AI maneuvers such as tacking too close, failing to keep clear, or denying mark-room.
+- Add user warnings for likely fouls before tacks, gybes, and close crossings.
+- Record rules incidents in the event log with involved boats and rule category.
+- Add a simple penalty model, such as a penalty turn or time penalty.
+- Add tests for common rules situations and mark-room scenarios.
+
+Deliverable: AI and user boat interactions follow the core Racing Rules of Sailing well enough for tactical experimentation.
+
 ## Suggested Milestones
 
 - Milestone 1: Course layout prototype, after Phase 2.
@@ -355,6 +407,7 @@ Deliverable: packaged Windows prototype ready for repeated experimentation.
 - Milestone 3: Wind scenario lab, after Phase 5.
 - Milestone 4: Race against AI boats, after Phase 6.
 - Milestone 5: Terrain-aware prototype, after Phase 8.
+- Milestone 6: Rules-aware racing prototype, after Phase 9.
 
 ## Early Design Decisions To Confirm
 
@@ -364,6 +417,8 @@ Deliverable: packaged Windows prototype ready for repeated experimentation.
 - Should `T` always tack 90 degrees, or should it switch to the mirrored true wind angle from the previous tack?
 - Should gybing be automatic downwind at first, or controlled separately with `G`?
 - Should AI boats prioritize simple mark navigation or realistic tactical choices early?
+- Which Racing Rules of Sailing edition should the simulator target first?
+- Should rules incidents result in automatic penalties, warnings only, or configurable enforcement?
 
 ## Immediate Next Steps
 
