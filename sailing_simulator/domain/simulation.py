@@ -604,6 +604,14 @@ def tack(boat: Boat, wind_from_degrees: float) -> None:
     release_collision_stop_if_heading_changed(boat)
 
 
+def gybe(boat: Boat, wind_from_degrees: float) -> None:
+    difference = signed_angle(wind_from_degrees, boat.heading_degrees)
+    turn = -90.0 if difference > 0 else 90.0
+    boat.heading_degrees = normalize_degrees(boat.heading_degrees + turn)
+    boat.speed_knots *= 0.75
+    release_collision_stop_if_heading_changed(boat)
+
+
 def bearing_to(origin: Vector2, target: Vector2) -> float:
     dx = target.x - origin.x
     dy = origin.y - target.y

@@ -21,6 +21,7 @@ from sailing_simulator.domain.simulation import (
     bearing_to,
     best_vmg_heading,
     detect_race_events,
+    gybe,
     reset_boats_to_start,
     start_race_sequence,
     step_boat,
@@ -77,6 +78,28 @@ def test_tack_turns_boat_roughly_onto_opposite_tack_and_slows():
 
     assert boat.heading_degrees == 45.0
     assert boat.speed_knots == 3.25
+
+
+def test_gybe_turns_boat_roughly_onto_opposite_downwind_board_and_slows():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.heading_degrees = 145.0
+    boat.speed_knots = 6.0
+
+    gybe(boat, scenario.wind_model.base_direction_degrees)
+
+    assert boat.heading_degrees == 235.0
+    assert boat.speed_knots == 4.5
+
+
+def test_gybe_turns_opposite_direction_from_other_downwind_board():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.heading_degrees = 215.0
+
+    gybe(boat, scenario.wind_model.base_direction_degrees)
+
+    assert boat.heading_degrees == 125.0
 
 
 def test_ai_boat_moves_under_simulation():

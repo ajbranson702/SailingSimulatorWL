@@ -41,6 +41,7 @@ from sailing_simulator.domain.presets import (
 from sailing_simulator.domain.race_progress import ranked_boats, target_label_for, total_targets_for
 from sailing_simulator.domain.serialization import load_scenario, save_scenario
 from sailing_simulator.domain.simulation import (
+    gybe,
     reset_boats_to_start,
     start_race_sequence,
     steer_away_from_wind,
@@ -345,6 +346,8 @@ class MainWindow(QMainWindow):
             steer_away_from_wind(user_boat, wind_from, 5.0)
         elif key == Qt.Key.Key_T:
             tack(user_boat, wind_from)
+        elif key == Qt.Key.Key_G:
+            gybe(user_boat, wind_from)
         else:
             return False
 

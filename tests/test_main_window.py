@@ -1,6 +1,7 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QSizePolicy
 
-from sailing_simulator.domain.models import RaceFormat, TerrainObject, TerrainType, Vector2, default_scenario
+from sailing_simulator.domain.models import BoatControlMode, RaceFormat, TerrainObject, TerrainType, Vector2, default_scenario
 from sailing_simulator.domain.presets import course_for_format
 from sailing_simulator.domain.serialization import save_scenario
 from sailing_simulator.ui.main_window import MainWindow
@@ -163,5 +164,22 @@ def test_start_button_begins_configured_countdown():
     assert "Countdown: 3:00" in window.status.text()
 
     window._pause_simulation()
+    window.close()
+    app.quit()
+
+
+def test_g_key_gybes_user_boat():
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    user_boat = next(boat for boat in window.scenario.boats if boat.control_mode == BoatControlMode.USER)
+    user_boat.heading_degrees = 145.0
+    user_boat.speed_knots = 6.0
+
+    handled = window._handle_key(Qt.Key.Key_G)
+
+    assert handled
+    assert user_boat.heading_degrees == 235.0
+    assert user_boat.speed_knots == 4.5
+
     window.close()
     app.quit()

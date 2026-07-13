@@ -31,6 +31,7 @@ from sailing_simulator.domain.presets import (
 from sailing_simulator.domain.race_progress import mark_sequence_for, target_label_for, target_mark_for, total_targets_for
 from sailing_simulator.domain.serialization import load_scenario, save_scenario
 from sailing_simulator.domain.simulation import (
+    gybe,
     reset_boats_to_start,
     start_race_sequence,
     step_scenario,
@@ -64,6 +65,7 @@ __all__ = [
     "adapt_course_to_format",
     "add_gybe_mark",
     "course_for_format",
+    "gybe",
     "invalid_marks_for",
     "load_scenario",
     "mark_sequence_for",

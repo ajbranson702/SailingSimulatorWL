@@ -94,10 +94,10 @@ Keyboard controls:
 - Up arrow: head up toward the wind when sailing upwind, or steer toward a hotter angle when sailing downwind.
 - Down arrow: bear away from the wind when sailing upwind, or steer deeper when sailing downwind.
 - `T`: tack, turning approximately 90 degrees onto the opposite tack.
+- `G`: gybe, turning approximately 90 degrees onto the opposite downwind board.
 
 Future controls:
 
-- `G`: gybe when sailing downwind.
 - Space: pause/resume.
 - `R`: reset scenario.
 - Mouse selection for choosing controlled boat or inspecting wind cells.
