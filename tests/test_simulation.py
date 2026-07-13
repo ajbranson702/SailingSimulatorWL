@@ -14,6 +14,7 @@ from sailing_simulator.domain.simulation import (
     AI_MIN_MANEUVER_INTERVAL_SECONDS,
     ai_board_heading,
     ai_board_near_boundary,
+    ai_prestart_target_position_for_boat,
     ai_steering_target_position,
     ai_target_position,
     bearing_to,
@@ -21,6 +22,7 @@ from sailing_simulator.domain.simulation import (
     detect_race_events,
     reset_boats_to_start,
     start_race_sequence,
+    step_boat,
     step_scenario,
     steer_away_from_wind,
     tack,
@@ -147,6 +149,18 @@ def test_ai_targets_start_finish_line_after_w_course_marks_are_complete():
     ai_boat.ai_board = 1
 
     assert ai_target_position(ai_boat, scenario) == Vector2(555.0, 700.0)
+
+
+def test_ai_targets_prestart_side_during_countdown():
+    scenario = default_scenario()
+    scenario.race_state.elapsed_seconds = -60.0
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+
+    target = ai_target_position(ai_boat, scenario)
+    prestart_target = ai_prestart_target_position_for_boat(ai_boat, scenario)
+
+    assert target == prestart_target
+    assert target.y > scenario.course.start_line.pin.y
 
 
 def test_ai_targets_leeward_mark_before_w2_finish_line():
@@ -326,6 +340,23 @@ def test_line_crossing_before_start_is_recorded_as_early_start_not_valid_start()
     assert boat.is_early_start
     assert not boat.has_started
     assert any(event.event_type == RaceEventType.EARLY_START for event in scenario.race_state.events)
+
+
+def test_ai_boat_does_not_cross_start_line_before_countdown_reaches_zero():
+    scenario = default_scenario()
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    scenario.boats = [ai_boat]
+    scenario.race_state.elapsed_seconds = -5.0
+    ai_boat.position = Vector2(450.0, 710.0)
+    ai_boat.heading_degrees = 0.0
+    ai_boat.speed_knots = 8.0
+
+    step_boat(ai_boat, scenario, 5.0)
+
+    assert ai_boat.position == Vector2(450.0, 710.0)
+    assert ai_boat.speed_knots == 0.0
+    assert not ai_boat.is_early_start
+    assert not any(event.event_type == RaceEventType.EARLY_START for event in scenario.race_state.events)
 
 
 def test_early_start_boat_must_cross_again_after_gun():

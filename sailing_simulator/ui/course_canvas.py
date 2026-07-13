@@ -60,6 +60,7 @@ class CourseCanvas(QWidget):
         self._draw_tracks(painter, rect)
         self._draw_boats(painter, rect)
         painter.restore()
+        self._draw_countdown_overlay(painter, QRectF(rect))
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() != Qt.MouseButton.LeftButton:
@@ -107,6 +108,28 @@ class CourseCanvas(QWidget):
         painter.setPen(QPen(QColor("#24576a"), 1))
         painter.setFont(QFont("Segoe UI", 10))
         painter.drawText(rect.adjusted(12, 10, -12, -12), Qt.AlignmentFlag.AlignTop, "Wind from top of screen")
+
+    def _draw_countdown_overlay(self, painter: QPainter, rect: QRectF) -> None:
+        elapsed = self.scenario.race_state.elapsed_seconds
+        if elapsed >= 0.0 or not self.scenario.race_state.is_running:
+            return
+
+        remaining = self._format_clock(-elapsed)
+        badge = QRectF(rect.center().x() - 115.0, rect.top() + 22.0, 230.0, 82.0)
+        painter.setPen(QPen(QColor("#16323f"), 2))
+        painter.setBrush(QColor(255, 255, 255, 218))
+        painter.drawRoundedRect(badge, 8, 8)
+
+        painter.setPen(QPen(QColor("#0f4c6a"), 1))
+        painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        painter.drawText(badge.adjusted(0, 8, 0, 0), Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, "START IN")
+        painter.setFont(QFont("Segoe UI", 32, QFont.Weight.Bold))
+        painter.drawText(badge.adjusted(0, 24, 0, -6), Qt.AlignmentFlag.AlignCenter, remaining)
+
+    def _format_clock(self, seconds: float) -> str:
+        whole_seconds = max(0, int(round(seconds)))
+        minutes, seconds_part = divmod(whole_seconds, 60)
+        return f"{minutes}:{seconds_part:02d}"
 
     def _draw_wind_grid(self, painter: QPainter, rect: QRectF) -> None:
         field = self.scenario.wind_field

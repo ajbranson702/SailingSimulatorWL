@@ -141,6 +141,8 @@ def first_ai_target_position(scenario: Scenario) -> Vector2:
 
 def ai_target_position(boat: Boat, scenario: Scenario) -> Vector2:
     if not boat.has_started:
+        if scenario.race_state.elapsed_seconds < 0.0:
+            return ai_prestart_target_position_for_boat(boat, scenario)
         return first_ai_target_position(scenario)
 
     target = target_mark_for(scenario.course, boat.target_leg_index)
@@ -150,6 +152,9 @@ def ai_target_position(boat: Boat, scenario: Scenario) -> Vector2:
 
 
 def ai_steering_target_position(boat: Boat, scenario: Scenario) -> Vector2:
+    if not boat.has_started and scenario.race_state.elapsed_seconds < 0.0:
+        return ai_prestart_target_position_for_boat(boat, scenario)
+
     if not boat.has_started:
         target = target_mark_for(scenario.course, 0)
         target_index = 0
@@ -276,6 +281,33 @@ def ai_finish_target_position_for_boat(boat: Boat, scenario: Scenario) -> Vector
     side = boat.ai_board or 1
     offset = min(95.0, length * 0.48)
     return Vector2(center.x + (dx / length) * offset * side, center.y + (dy / length) * offset * side)
+
+
+def ai_prestart_target_position_for_boat(boat: Boat, scenario: Scenario) -> Vector2:
+    start = scenario.course.start_line
+    dx = start.committee_boat.x - start.pin.x
+    dy = start.committee_boat.y - start.pin.y
+    line_length = math.hypot(dx, dy)
+    if line_length < 1e-9:
+        return boat.position
+
+    line_unit = Vector2(dx / line_length, dy / line_length)
+    center = start_line_center(scenario)
+    prestart_side = prestart_side_unit(scenario)
+    sequence_remaining = max(0.0, -scenario.race_state.elapsed_seconds)
+    depth = 42.0 if sequence_remaining <= 15.0 else 115.0
+    if boat.is_early_start:
+        depth = 150.0
+
+    fleet_index = scenario.boats.index(boat) if boat in scenario.boats else 0
+    fleet_count = max(1, len(scenario.boats))
+    spacing = min(80.0, max(35.0, line_length / (fleet_count + 1)))
+    along_offset = (fleet_index - (fleet_count - 1) * 0.5) * spacing
+
+    return Vector2(
+        center.x + line_unit.x * along_offset + prestart_side.x * depth,
+        center.y + line_unit.y * along_offset + prestart_side.y * depth,
+    )
 
 
 def best_vmg_heading(boat: Boat, scenario: Scenario, target_position: Vector2) -> float:
@@ -441,6 +473,16 @@ def step_boat(boat: Boat, scenario: Scenario, elapsed_seconds: float) -> None:
         boat.position.x + math.sin(radians) * distance_units,
         boat.position.y - math.cos(radians) * distance_units,
     )
+    if (
+        boat.control_mode == BoatControlMode.AI
+        and not boat.has_started
+        and scenario.race_state.elapsed_seconds < 0.0
+        and start_finish_line_crossing_parameter(scenario, boat.position, next_position) is not None
+    ):
+        boat.speed_knots = 0.0
+        append_track_point(boat)
+        return
+
     clamped_position = clamp_to_course(next_position, scenario.course.boundary_width, scenario.course.boundary_height)
     if clamped_position != next_position:
         boat.speed_knots = 0.0
@@ -938,6 +980,22 @@ def start_line_center(scenario: Scenario) -> Vector2:
         (start.pin.x + start.committee_boat.x) * 0.5,
         (start.pin.y + start.committee_boat.y) * 0.5,
     )
+
+
+def prestart_side_unit(scenario: Scenario) -> Vector2:
+    start = scenario.course.start_line
+    dx = start.committee_boat.x - start.pin.x
+    dy = start.committee_boat.y - start.pin.y
+    length = math.hypot(dx, dy)
+    if length < 1e-9:
+        return Vector2(0.0, 1.0)
+
+    first_target = first_ai_target_position(scenario)
+    center = start_line_center(scenario)
+    first_normal = Vector2(-dy / length, dx / length)
+    second_normal = Vector2(dy / length, -dx / length)
+    toward_course = Vector2(first_target.x - center.x, first_target.y - center.y)
+    return second_normal if dot(toward_course, first_normal) >= dot(toward_course, second_normal) else first_normal
 
 
 def start_finish_line_crossing_parameter(scenario: Scenario, segment_start: Vector2, segment_end: Vector2) -> float | None:

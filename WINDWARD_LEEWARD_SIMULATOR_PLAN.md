@@ -412,6 +412,14 @@ Deliverable: starts, AI decisions, and user boat interactions follow the core Ra
 
 Status: started. Initial start-sequence and early-start detection are implemented.
 
+Implementation approach:
+
+- Model rule-relevant boat relationships separately from boat movement: tack, relative bearing, overlap, clear-ahead/clear-astern, windward/leeward, distance, and likely crossing risk.
+- Use those relationships to identify right-of-way and keep-clear obligations before choosing AI maneuvers.
+- Let the AI score maneuvers by legality first and VMG second, so it avoids tacking too close, crossing on port, denying mark-room, or sailing into an overlap conflict.
+- Record rule incidents in the event log when a keep-clear boat fails to keep clear, when a tacking/gybing boat causes a conflict, or when contact occurs.
+- Surface user warnings from the same rules engine before or immediately after risky maneuvers.
+
 ## Suggested Milestones
 
 - Milestone 1: Course layout prototype, after Phase 2.
