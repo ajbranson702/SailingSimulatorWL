@@ -38,6 +38,7 @@ def test_scenario_controls_keep_stable_widths():
         window.persistent_shift,
         window.gust_percent,
         window.time_scale,
+        window.start_sequence,
     ]
 
     assert all(control.minimumWidth() >= 170 for control in controls)
@@ -145,5 +146,22 @@ def test_load_configuration_restores_terrain_and_selects_it(tmp_path):
     assert window.canvas.selected_terrain_index == 0
     assert window.delete_terrain_button.isEnabled()
 
+    window.close()
+    app.quit()
+
+
+def test_start_button_begins_configured_countdown():
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    window.start_sequence.setValue(180.0)
+
+    window._start_simulation()
+
+    assert window.scenario.race_state.is_running
+    assert window.scenario.race_state.start_sequence_seconds == 180.0
+    assert window.scenario.race_state.elapsed_seconds == -180.0
+    assert "Countdown: 3:00" in window.status.text()
+
+    window._pause_simulation()
     window.close()
     app.quit()

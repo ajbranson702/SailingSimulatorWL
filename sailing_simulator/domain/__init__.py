@@ -32,6 +32,7 @@ from sailing_simulator.domain.race_progress import mark_sequence_for, target_lab
 from sailing_simulator.domain.serialization import load_scenario, save_scenario
 from sailing_simulator.domain.simulation import (
     reset_boats_to_start,
+    start_race_sequence,
     step_scenario,
     tack,
     target_boat_speed,
@@ -70,6 +71,7 @@ __all__ = [
     "required_mark_types_for",
     "save_scenario",
     "reset_boats_to_start",
+    "start_race_sequence",
     "step_scenario",
     "tack",
     "target_boat_speed",

@@ -393,6 +393,8 @@ Status: initial terrain placement and wind-effect implementation complete.
 
 Deliverable: packaged Windows prototype ready for repeated experimentation.
 
+Status: deferred until the app is ready for releasable packaging.
+
 ### Phase 9: Start Sequence, Racing Rules, and Legal Maneuvers
 
 - Add a start timer and countdown sequence for practice starts.
@@ -407,6 +409,8 @@ Deliverable: packaged Windows prototype ready for repeated experimentation.
 - Add tests for common rules situations and mark-room scenarios.
 
 Deliverable: starts, AI decisions, and user boat interactions follow the core Racing Rules of Sailing well enough for tactical experimentation.
+
+Status: started. Initial start-sequence and early-start detection are implemented.
 
 ## Suggested Milestones
 

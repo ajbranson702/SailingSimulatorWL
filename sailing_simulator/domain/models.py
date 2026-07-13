@@ -53,6 +53,7 @@ class RaceEventType(str, Enum):
     FINISH_CROSSED = "finish_crossed"
     MARK_ROUNDED = "mark_rounded"
     START_CROSSED = "start_crossed"
+    EARLY_START = "early_start"
 
 
 @dataclass
@@ -99,6 +100,7 @@ class Boat:
     ai_rounding_stage: int = 0
     ai_collision_escape_until_seconds: float = 0.0
     ai_collision_escape_heading: float | None = None
+    is_early_start: bool = False
 
 
 @dataclass
@@ -154,6 +156,7 @@ class RaceState:
     elapsed_seconds: float = 0.0
     is_running: bool = False
     time_scale: float = 10.0
+    start_sequence_seconds: float = 300.0
     events: list[RaceEvent] = field(default_factory=list)
     finished_boats: set[str] = field(default_factory=set)
 

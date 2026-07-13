@@ -52,6 +52,8 @@ def step_scenario(scenario: Scenario, elapsed_seconds: float) -> None:
     previous_positions = {boat.name: boat.position for boat in scenario.boats}
     scenario.race_state.events = []
     scenario.race_state.elapsed_seconds += elapsed_seconds
+    if abs(scenario.race_state.elapsed_seconds) < 1e-9:
+        scenario.race_state.elapsed_seconds = 0.0
     update_wind_field(scenario)
     for boat in scenario.boats:
         if boat.control_mode == BoatControlMode.AI:
@@ -524,9 +526,20 @@ def reset_boats_to_start(scenario: Scenario) -> None:
         boat.ai_rounding_stage = 0
         boat.ai_collision_escape_until_seconds = 0.0
         boat.ai_collision_escape_heading = None
+        boat.is_early_start = False
     scenario.race_state.elapsed_seconds = 0.0
     scenario.race_state.events = []
     scenario.race_state.finished_boats = set()
+
+
+def start_race_sequence(scenario: Scenario) -> None:
+    if (
+        not scenario.race_state.is_running
+        and scenario.race_state.elapsed_seconds == 0.0
+        and all(not boat.has_started for boat in scenario.boats)
+    ):
+        scenario.race_state.elapsed_seconds = -max(0.0, scenario.race_state.start_sequence_seconds)
+    scenario.race_state.is_running = True
 
 
 def detect_race_events(scenario: Scenario, previous_positions: dict[str, Vector2]) -> None:
@@ -551,8 +564,18 @@ def detect_course_progress(scenario: Scenario, previous_positions: dict[str, Vec
                 crossing = start_finish_line_crossing_parameter(scenario, previous, boat.position)
                 if crossing is None or crossing + 1e-9 < segment_position:
                     break
+                if scenario.race_state.elapsed_seconds < 0.0:
+                    if not boat.is_early_start:
+                        boat.is_early_start = True
+                        add_event(
+                            scenario,
+                            RaceEventType.EARLY_START,
+                            f"{boat.name} was over early.",
+                        )
+                    break
 
                 boat.has_started = True
+                boat.is_early_start = False
                 segment_position = crossing
                 add_event(scenario, RaceEventType.START_CROSSED, f"{boat.name} started.")
                 continue

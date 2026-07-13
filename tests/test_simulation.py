@@ -20,6 +20,7 @@ from sailing_simulator.domain.simulation import (
     best_vmg_heading,
     detect_race_events,
     reset_boats_to_start,
+    start_race_sequence,
     step_scenario,
     steer_away_from_wind,
     tack,
@@ -280,6 +281,70 @@ def test_line_crossing_starts_before_it_can_finish():
     assert boat.has_started
     assert boat.name not in scenario.race_state.finished_boats
     assert [event.event_type for event in scenario.race_state.events].count(RaceEventType.START_CROSSED) == 1
+
+
+def test_start_sequence_counts_down_to_race_time_zero():
+    scenario = default_scenario()
+    scenario.race_state.start_sequence_seconds = 30.0
+
+    start_race_sequence(scenario)
+
+    assert scenario.race_state.is_running
+    assert scenario.race_state.elapsed_seconds == -30.0
+
+    step_scenario(scenario, 10.0)
+
+    assert scenario.race_state.elapsed_seconds == -20.0
+
+    step_scenario(scenario, 20.0)
+
+    assert scenario.race_state.elapsed_seconds == 0.0
+
+
+def test_paused_start_sequence_resumes_without_resetting_countdown():
+    scenario = default_scenario()
+    scenario.race_state.start_sequence_seconds = 30.0
+
+    start_race_sequence(scenario)
+    step_scenario(scenario, 10.0)
+    scenario.race_state.is_running = False
+    start_race_sequence(scenario)
+
+    assert scenario.race_state.elapsed_seconds == -20.0
+    assert scenario.race_state.is_running
+
+
+def test_line_crossing_before_start_is_recorded_as_early_start_not_valid_start():
+    scenario = default_scenario()
+    scenario.race_state.elapsed_seconds = -5.0
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    previous = Vector2(450.0, 710.0)
+    boat.position = Vector2(450.0, 690.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.is_early_start
+    assert not boat.has_started
+    assert any(event.event_type == RaceEventType.EARLY_START for event in scenario.race_state.events)
+
+
+def test_early_start_boat_must_cross_again_after_gun():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    scenario.race_state.elapsed_seconds = -1.0
+    previous = Vector2(450.0, 710.0)
+    boat.position = Vector2(450.0, 690.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+    scenario.race_state.elapsed_seconds = 0.5
+    previous = Vector2(450.0, 690.0)
+    boat.position = Vector2(450.0, 710.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.has_started
+    assert not boat.is_early_start
+    assert any(event.event_type == RaceEventType.START_CROSSED for event in scenario.race_state.events)
 
 
 def test_mark_rounding_advances_target_leg():

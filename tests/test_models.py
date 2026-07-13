@@ -39,12 +39,16 @@ def test_scenario_serialization_round_trip_preserves_course():
     scenario.course = course_for_format(RaceFormat.T3)
     scenario.wind_model.base_speed_knots = 14.0
     scenario.race_state.time_scale = 25.0
+    scenario.race_state.start_sequence_seconds = 180.0
+    scenario.boats[0].is_early_start = True
 
     restored = scenario_from_dict(scenario_to_dict(scenario))
 
     assert restored.course.race_format == RaceFormat.T3
     assert restored.wind_model.base_speed_knots == 14.0
     assert restored.race_state.time_scale == 25.0
+    assert restored.race_state.start_sequence_seconds == 180.0
+    assert restored.boats[0].is_early_start
     assert [mark.mark_type for mark in restored.course.marks] == [
         MarkType.WINDWARD,
         MarkType.GYBE,

@@ -42,6 +42,7 @@ from sailing_simulator.domain.race_progress import ranked_boats, target_label_fo
 from sailing_simulator.domain.serialization import load_scenario, save_scenario
 from sailing_simulator.domain.simulation import (
     reset_boats_to_start,
+    start_race_sequence,
     steer_away_from_wind,
     steer_toward_wind,
     step_scenario,
@@ -67,7 +68,7 @@ class MainWindow(QMainWindow):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setCentralWidget(self._build_content())
         self._refresh_controls_from_scenario()
-        self.statusBar().showMessage("Phase 6 AI fleet controls ready")
+        self.statusBar().showMessage("Phase 9 start sequence controls ready")
 
     def _build_content(self) -> QWidget:
         root = QWidget()
@@ -182,6 +183,21 @@ class MainWindow(QMainWindow):
         form.addRow("Sim speed", self.time_scale)
 
         layout.addLayout(form)
+        layout.addWidget(self._section_label("Start Sequence"))
+
+        start_form = QFormLayout()
+        start_form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.start_sequence = QDoubleSpinBox()
+        self.start_sequence.setRange(0.0, 600.0)
+        self.start_sequence.setSingleStep(30.0)
+        self.start_sequence.setDecimals(0)
+        self.start_sequence.setSuffix(" s")
+        self.start_sequence.setValue(self.scenario.race_state.start_sequence_seconds)
+        self.start_sequence.valueChanged.connect(self._update_scenario_from_controls)
+        self._stabilize_control(self.start_sequence)
+        start_form.addRow("Countdown", self.start_sequence)
+        layout.addLayout(start_form)
+
         layout.addWidget(self._section_label("Course"))
 
         course_actions = QHBoxLayout()
@@ -433,10 +449,11 @@ class MainWindow(QMainWindow):
 
     def _start_simulation(self) -> None:
         self._update_scenario_from_controls()
-        self.scenario.race_state.is_running = True
+        start_race_sequence(self.scenario)
         self._timer.start()
         self.canvas.setFocus()
-        self.statusBar().showMessage("Simulation running")
+        self._refresh_boat_status()
+        self.statusBar().showMessage("Start sequence running" if self.scenario.race_state.elapsed_seconds < 0.0 else "Simulation running")
 
     def _pause_simulation(self) -> None:
         self.scenario.race_state.is_running = False
@@ -467,6 +484,7 @@ class MainWindow(QMainWindow):
         self.scenario.wind_model.persistent_shift_degrees_per_minute = self.persistent_shift.value()
         self.scenario.wind_model.gust_percent = self.gust_percent.value()
         self.scenario.race_state.time_scale = self.time_scale.value()
+        self.scenario.race_state.start_sequence_seconds = self.start_sequence.value()
         update_wind_field(self.scenario)
         self.canvas.update()
 
@@ -485,6 +503,7 @@ class MainWindow(QMainWindow):
         self.persistent_shift.setValue(self.scenario.wind_model.persistent_shift_degrees_per_minute)
         self.gust_percent.setValue(self.scenario.wind_model.gust_percent)
         self.time_scale.setValue(self.scenario.race_state.time_scale)
+        self.start_sequence.setValue(self.scenario.race_state.start_sequence_seconds)
         self._refresh_course_controls()
         if self._selected_terrain() is None:
             self._set_selected_terrain_index(None)
@@ -579,7 +598,7 @@ class MainWindow(QMainWindow):
             f"Wind: {local_wind_direction:.0f} deg / {local_wind_speed:.1f} kt\n"
             f"TWA: {twa:.0f} deg\n"
             f"Sim speed: {self.scenario.race_state.time_scale:.0f}x\n"
-            f"Elapsed: {self.scenario.race_state.elapsed_seconds:.1f} s\n"
+            f"{self._race_clock_text()}\n"
             f"Course: {self.scenario.course.race_format.value}\n"
             f"{progress_text}\n"
             f"{self._rankings_text()}\n"
@@ -637,6 +656,8 @@ class MainWindow(QMainWindow):
         )
 
     def _boat_progress_text(self, boat: Boat) -> str:
+        if boat.is_early_start and not boat.has_started:
+            return "Target: restart after early start"
         if boat.is_finished and boat.finish_time_seconds is not None:
             return f"Finished: {boat.finish_time_seconds:.1f} s"
         if not boat.has_started:
@@ -645,6 +666,17 @@ class MainWindow(QMainWindow):
         total_targets = total_targets_for(self.scenario.course)
         next_target = target_label_for(self.scenario.course, boat.target_leg_index)
         return f"Target: {next_target} ({boat.target_leg_index}/{total_targets})"
+
+    def _race_clock_text(self) -> str:
+        elapsed = self.scenario.race_state.elapsed_seconds
+        if elapsed < 0.0:
+            return f"Countdown: {self._format_clock(-elapsed)}"
+        return f"Elapsed: {elapsed:.1f} s"
+
+    def _format_clock(self, seconds: float) -> str:
+        whole_seconds = max(0, int(round(seconds)))
+        minutes, seconds_part = divmod(whole_seconds, 60)
+        return f"{minutes}:{seconds_part:02d}"
 
     def _event_status_text(self) -> str:
         if self.scenario.race_state.events:

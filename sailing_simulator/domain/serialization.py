@@ -58,6 +58,7 @@ def scenario_to_dict(scenario: Scenario) -> dict[str, Any]:
             "elapsed_seconds": scenario.race_state.elapsed_seconds,
             "is_running": scenario.race_state.is_running,
             "time_scale": scenario.race_state.time_scale,
+            "start_sequence_seconds": scenario.race_state.start_sequence_seconds,
             "events": [race_event_to_dict(event) for event in scenario.race_state.events],
             "finished_boats": sorted(scenario.race_state.finished_boats),
         },
@@ -81,6 +82,7 @@ def race_state_from_dict(data: dict[str, Any]) -> RaceState:
         elapsed_seconds=float(data.get("elapsed_seconds", 0.0)),
         is_running=bool(data.get("is_running", False)),
         time_scale=float(data.get("time_scale", 10.0)),
+        start_sequence_seconds=float(data.get("start_sequence_seconds", 300.0)),
         events=[race_event_from_dict(event) for event in data.get("events", [])],
         finished_boats=set(data.get("finished_boats", [])),
     )
@@ -165,6 +167,7 @@ def boat_to_dict(boat: Boat) -> dict[str, Any]:
         "ai_rounding_stage": boat.ai_rounding_stage,
         "ai_collision_escape_until_seconds": boat.ai_collision_escape_until_seconds,
         "ai_collision_escape_heading": boat.ai_collision_escape_heading,
+        "is_early_start": boat.is_early_start,
     }
 
 
@@ -190,6 +193,7 @@ def boat_from_dict(data: dict[str, Any]) -> Boat:
         ai_rounding_stage=int(data.get("ai_rounding_stage", 0)),
         ai_collision_escape_until_seconds=float(data.get("ai_collision_escape_until_seconds", 0.0)),
         ai_collision_escape_heading=data.get("ai_collision_escape_heading"),
+        is_early_start=bool(data.get("is_early_start", False)),
     )
 
 
