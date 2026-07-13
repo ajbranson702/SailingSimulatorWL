@@ -11,6 +11,7 @@ from sailing_simulator.domain.models import (
     Polar,
     RaceEvent,
     RaceEventType,
+    RaceFormat,
     Scenario,
     Vector2,
 )
@@ -500,10 +501,13 @@ def finish_mark_crossing_parameter(scenario: Scenario, segment_start: Vector2, s
 
 
 def finish_mark_for(scenario: Scenario) -> Mark | None:
+    if scenario.course.race_format != RaceFormat.T3:
+        return None
+
     explicit_finish = next((mark for mark in scenario.course.marks if mark.mark_type == MarkType.FINISH), None)
     if explicit_finish is not None:
         return explicit_finish
-    return next((mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD), None)
+    return None
 
 
 def earliest_valid_parameter(parameters: list[float | None], minimum: float) -> float | None:

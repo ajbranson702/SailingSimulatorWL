@@ -1,4 +1,5 @@
-from sailing_simulator.domain.models import BoatControlMode, MarkType, RaceEventType, Vector2, default_scenario
+from sailing_simulator.domain.models import BoatControlMode, MarkType, RaceEventType, RaceFormat, Vector2, default_scenario
+from sailing_simulator.domain.presets import course_for_format
 from sailing_simulator.domain.simulation import (
     AI_MIN_MANEUVER_INTERVAL_SECONDS,
     ai_board_heading,
@@ -185,12 +186,45 @@ def test_finish_crossing_only_counts_after_required_marks():
 
 def test_finish_counts_when_boat_reaches_finish_mark_after_required_marks():
     scenario = default_scenario()
+    scenario.course = course_for_format(RaceFormat.T3)
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    boat.target_leg_index = 2
+    finish = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.FINISH)
+    previous = Vector2(finish.position.x, finish.position.y - 80.0)
+    boat.position = Vector2(finish.position.x, finish.position.y + 80.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.is_finished
+    assert boat.name in scenario.race_state.finished_boats
+
+
+def test_w_course_does_not_finish_at_leeward_mark_before_sequence_complete():
+    scenario = default_scenario()
+    scenario.course = course_for_format(RaceFormat.W4)
     boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
     boat.has_started = True
     boat.target_leg_index = 1
-    finish = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
-    previous = Vector2(finish.position.x, finish.position.y - 80.0)
-    boat.position = Vector2(finish.position.x, finish.position.y + 80.0)
+    leeward = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
+    previous = Vector2(leeward.position.x, leeward.position.y - 80.0)
+    boat.position = Vector2(leeward.position.x, leeward.position.y + 80.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.target_leg_index == 2
+    assert not boat.is_finished
+    assert boat.name not in scenario.race_state.finished_boats
+
+
+def test_w_course_finishes_after_all_marks_and_start_line_crossing():
+    scenario = default_scenario()
+    scenario.course = course_for_format(RaceFormat.W4)
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    boat.target_leg_index = 3
+    previous = Vector2(450.0, 690.0)
+    boat.position = Vector2(450.0, 710.0)
 
     detect_race_events(scenario, {boat.name: previous})
 
