@@ -91,6 +91,9 @@ class Boat:
     finish_time_seconds: float | None = None
     collision_stop_heading: float | None = None
     collision_released_heading: float | None = None
+    ai_board: int | None = None
+    ai_board_target_leg_index: int = -1
+    ai_last_maneuver_seconds: float = -9999.0
 
 
 @dataclass

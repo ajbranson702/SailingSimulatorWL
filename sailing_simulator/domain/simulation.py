@@ -21,6 +21,11 @@ COURSE_UNITS_PER_NAUTICAL_MILE = 1800.0
 MAX_TRACK_POINTS = 300
 BOAT_COLLISION_RADIUS = 28.0
 MARK_COLLISION_RADIUS = 22.0
+AI_CLOSE_TARGET_RADIUS = 85.0
+AI_BOUNDARY_MARGIN = 75.0
+AI_MIN_MANEUVER_INTERVAL_SECONDS = 18.0
+AI_UPWIND_ANGLE = 45.0
+AI_DOWNWIND_ANGLE = 35.0
 
 
 def step_scenario(scenario: Scenario, elapsed_seconds: float) -> None:
@@ -39,13 +44,45 @@ def step_scenario(scenario: Scenario, elapsed_seconds: float) -> None:
 
 
 def update_ai_heading(boat: Boat, scenario: Scenario) -> None:
+    from sailing_simulator.domain.wind import wind_at
+
     if boat.is_finished:
         boat.speed_knots = 0.0
         return
 
-    target = target_mark_for(scenario.course, boat.target_leg_index) if boat.has_started else None
-    target_position = target.position if target is not None else first_ai_target_position(scenario)
-    desired_heading = best_vmg_heading(boat, scenario, target_position)
+    target_position = ai_target_position(boat, scenario)
+    wind_direction, wind_speed = wind_at(scenario, boat.position)
+    leg_mode = ai_leg_mode(wind_direction, bearing_to(boat.position, target_position))
+    reset_ai_board_if_needed(boat, scenario, target_position, leg_mode, wind_direction, wind_speed)
+    if boat.collision_stop_heading is not None:
+        boat.ai_board = -boat.ai_board if boat.ai_board is not None else best_ai_board(
+            boat,
+            scenario,
+            target_position,
+            leg_mode,
+            wind_direction,
+            wind_speed,
+        )
+        boat.ai_last_maneuver_seconds = scenario.race_state.elapsed_seconds
+
+    if boat.collision_stop_heading is None and distance(boat.position, target_position) <= AI_CLOSE_TARGET_RADIUS:
+        desired_heading = best_vmg_heading(boat, scenario, target_position)
+        boat.heading_degrees = turn_toward_heading(boat.heading_degrees, desired_heading, 18.0)
+        release_collision_stop_if_heading_changed(boat)
+        return
+
+    if should_change_ai_board(boat, scenario, target_position, leg_mode, wind_direction, wind_speed):
+        boat.ai_board = -boat.ai_board if boat.ai_board is not None else best_ai_board(
+            boat,
+            scenario,
+            target_position,
+            leg_mode,
+            wind_direction,
+            wind_speed,
+        )
+        boat.ai_last_maneuver_seconds = scenario.race_state.elapsed_seconds
+
+    desired_heading = ai_board_heading(wind_direction, leg_mode, boat.ai_board or 1)
     boat.heading_degrees = turn_toward_heading(boat.heading_degrees, desired_heading, 18.0)
     release_collision_stop_if_heading_changed(boat)
 
@@ -54,6 +91,16 @@ def first_ai_target_position(scenario: Scenario) -> Vector2:
     first_mark = target_mark_for(scenario.course, 0)
     if first_mark is not None:
         return first_mark.position
+    return finish_position_for(scenario.course)
+
+
+def ai_target_position(boat: Boat, scenario: Scenario) -> Vector2:
+    if not boat.has_started:
+        return first_ai_target_position(scenario)
+
+    target = target_mark_for(scenario.course, boat.target_leg_index)
+    if target is not None:
+        return target.position
     return finish_position_for(scenario.course)
 
 
@@ -75,6 +122,99 @@ def best_vmg_heading(boat: Boat, scenario: Scenario, target_position: Vector2) -
             best_heading = float(heading)
 
     return best_heading
+
+
+def reset_ai_board_if_needed(
+    boat: Boat,
+    scenario: Scenario,
+    target_position: Vector2,
+    leg_mode: str,
+    wind_direction: float,
+    wind_speed: float,
+) -> None:
+    if boat.ai_board is not None and boat.ai_board_target_leg_index == boat.target_leg_index:
+        return
+
+    boat.ai_board = best_ai_board(boat, scenario, target_position, leg_mode, wind_direction, wind_speed)
+    boat.ai_board_target_leg_index = boat.target_leg_index
+    boat.ai_last_maneuver_seconds = scenario.race_state.elapsed_seconds
+
+
+def should_change_ai_board(
+    boat: Boat,
+    scenario: Scenario,
+    target_position: Vector2,
+    leg_mode: str,
+    wind_direction: float,
+    wind_speed: float,
+) -> bool:
+    if boat.ai_board is None:
+        return True
+    if distance(boat.position, target_position) <= AI_CLOSE_TARGET_RADIUS:
+        return False
+    if scenario.race_state.elapsed_seconds - boat.ai_last_maneuver_seconds < AI_MIN_MANEUVER_INTERVAL_SECONDS:
+        return False
+    if ai_board_near_boundary(boat, scenario, wind_direction, leg_mode):
+        return True
+
+    current_score = ai_board_vmg_score(boat, scenario, target_position, leg_mode, wind_direction, wind_speed, boat.ai_board)
+    opposite_score = ai_board_vmg_score(boat, scenario, target_position, leg_mode, wind_direction, wind_speed, -boat.ai_board)
+    return opposite_score > max(0.1, current_score * 1.35)
+
+
+def ai_leg_mode(wind_direction: float, target_bearing: float) -> str:
+    relative_to_wind = abs(signed_angle(wind_direction, target_bearing))
+    return "downwind" if relative_to_wind > 100.0 else "upwind"
+
+
+def best_ai_board(
+    boat: Boat,
+    scenario: Scenario,
+    target_position: Vector2,
+    leg_mode: str,
+    wind_direction: float,
+    wind_speed: float,
+) -> int:
+    first_score = ai_board_vmg_score(boat, scenario, target_position, leg_mode, wind_direction, wind_speed, 1)
+    second_score = ai_board_vmg_score(boat, scenario, target_position, leg_mode, wind_direction, wind_speed, -1)
+    return 1 if first_score >= second_score else -1
+
+
+def ai_board_vmg_score(
+    boat: Boat,
+    scenario: Scenario,
+    target_position: Vector2,
+    leg_mode: str,
+    wind_direction: float,
+    wind_speed: float,
+    board: int,
+) -> float:
+    heading = ai_board_heading(wind_direction, leg_mode, board)
+    twa = true_wind_angle(heading, wind_direction)
+    speed = target_boat_speed(scenario.polar, wind_speed, twa)
+    alignment = math.cos(math.radians(signed_angle(heading, bearing_to(boat.position, target_position))))
+    return speed * alignment
+
+
+def ai_board_heading(wind_direction: float, leg_mode: str, board: int) -> float:
+    if leg_mode == "downwind":
+        return normalize_degrees(wind_direction + 180.0 + board * AI_DOWNWIND_ANGLE)
+    return normalize_degrees(wind_direction + board * AI_UPWIND_ANGLE)
+
+
+def ai_board_near_boundary(boat: Boat, scenario: Scenario, wind_direction: float, leg_mode: str) -> bool:
+    heading = ai_board_heading(wind_direction, leg_mode, boat.ai_board or 1)
+    radians = math.radians(heading)
+    projected = Vector2(
+        boat.position.x + math.sin(radians) * AI_BOUNDARY_MARGIN,
+        boat.position.y - math.cos(radians) * AI_BOUNDARY_MARGIN,
+    )
+    return (
+        projected.x <= 0.0
+        or projected.x >= scenario.course.boundary_width
+        or projected.y <= 0.0
+        or projected.y >= scenario.course.boundary_height
+    )
 
 
 def step_boat(boat: Boat, scenario: Scenario, elapsed_seconds: float) -> None:
@@ -182,6 +322,9 @@ def reset_boats_to_start(scenario: Scenario) -> None:
         boat.finish_time_seconds = None
         boat.collision_stop_heading = None
         boat.collision_released_heading = None
+        boat.ai_board = None
+        boat.ai_board_target_leg_index = -1
+        boat.ai_last_maneuver_seconds = -9999.0
     scenario.race_state.elapsed_seconds = 0.0
     scenario.race_state.events = []
     scenario.race_state.finished_boats = set()
@@ -319,7 +462,7 @@ def clamp_boats_to_course(scenario: Scenario) -> None:
 
 
 def stop_for_collision(boat: Boat) -> None:
-    if boat.collision_released_heading is not None and headings_match(boat.heading_degrees, boat.collision_released_heading):
+    if boat.collision_released_heading is not None:
         return
 
     boat.speed_knots = 0.0

@@ -154,6 +154,9 @@ def boat_to_dict(boat: Boat) -> dict[str, Any]:
         "finish_time_seconds": boat.finish_time_seconds,
         "collision_stop_heading": boat.collision_stop_heading,
         "collision_released_heading": boat.collision_released_heading,
+        "ai_board": boat.ai_board,
+        "ai_board_target_leg_index": boat.ai_board_target_leg_index,
+        "ai_last_maneuver_seconds": boat.ai_last_maneuver_seconds,
     }
 
 
@@ -171,6 +174,9 @@ def boat_from_dict(data: dict[str, Any]) -> Boat:
         finish_time_seconds=data.get("finish_time_seconds"),
         collision_stop_heading=data.get("collision_stop_heading"),
         collision_released_heading=data.get("collision_released_heading"),
+        ai_board=data.get("ai_board"),
+        ai_board_target_leg_index=int(data.get("ai_board_target_leg_index", -1)),
+        ai_last_maneuver_seconds=float(data.get("ai_last_maneuver_seconds", -9999.0)),
     )
 
 

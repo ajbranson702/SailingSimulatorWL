@@ -1,5 +1,9 @@
 from sailing_simulator.domain.models import BoatControlMode, MarkType, RaceEventType, Vector2, default_scenario
 from sailing_simulator.domain.simulation import (
+    AI_MIN_MANEUVER_INTERVAL_SECONDS,
+    ai_board_heading,
+    ai_board_near_boundary,
+    ai_target_position,
     bearing_to,
     best_vmg_heading,
     detect_race_events,
@@ -78,6 +82,44 @@ def test_best_vmg_heading_points_generally_toward_target():
     target_bearing = bearing_to(ai_boat.position, target)
 
     assert abs((heading - target_bearing + 180.0) % 360.0 - 180.0) <= 70.0
+
+
+def test_ai_holds_board_between_maneuver_decisions():
+    scenario = default_scenario()
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+
+    step_scenario(scenario, 1.0)
+    first_board = ai_boat.ai_board
+    first_heading = ai_boat.heading_degrees
+    step_scenario(scenario, 1.0)
+
+    assert ai_boat.ai_board == first_board
+    assert ai_boat.heading_degrees == turn_toward_heading(first_heading, ai_board_heading(0.0, "upwind", first_board), 18.0)
+
+
+def test_ai_changes_board_near_boundary_after_cooldown():
+    scenario = default_scenario()
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    ai_boat.position = Vector2(scenario.course.boundary_width - 20.0, 500.0)
+    ai_boat.ai_board = 1
+    ai_boat.ai_board_target_leg_index = ai_boat.target_leg_index
+    ai_boat.ai_last_maneuver_seconds = 0.0
+    scenario.race_state.elapsed_seconds = AI_MIN_MANEUVER_INTERVAL_SECONDS + 1.0
+
+    assert ai_board_near_boundary(ai_boat, scenario, 0.0, "upwind")
+    step_scenario(scenario, 1.0)
+
+    assert ai_boat.ai_board == -1
+
+
+def test_ai_targets_finish_after_required_marks_are_complete():
+    scenario = default_scenario()
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    finish = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
+    ai_boat.has_started = True
+    ai_boat.target_leg_index = 1
+
+    assert ai_target_position(ai_boat, scenario) == finish.position
 
 
 def test_turn_toward_heading_uses_shortest_turn():
