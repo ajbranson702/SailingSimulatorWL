@@ -203,9 +203,9 @@ class MainWindow(QMainWindow):
         layout.addLayout(mark_actions)
 
         file_actions = QHBoxLayout()
-        save = QPushButton("Save")
+        save = QPushButton("Save Config")
         save.clicked.connect(self._save_scenario)
-        load = QPushButton("Load")
+        load = QPushButton("Load Config")
         load.clicked.connect(self._load_scenario)
         file_actions.addWidget(save)
         file_actions.addWidget(load)
@@ -380,23 +380,37 @@ class MainWindow(QMainWindow):
 
     def _save_scenario(self) -> None:
         self._update_scenario_from_controls()
-        path, _ = QFileDialog.getSaveFileName(self, "Save Scenario", "scenario.json", "Scenario JSON (*.json)")
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Configuration",
+            "sailing_configuration.json",
+            "Sailing Configuration (*.json)",
+        )
         if not path:
             return
 
-        save_scenario(self.scenario, path)
-        self.statusBar().showMessage(f"Saved scenario to {path}")
+        self._save_scenario_to_path(path)
 
     def _load_scenario(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Load Scenario", "", "Scenario JSON (*.json)")
+        path, _ = QFileDialog.getOpenFileName(self, "Load Configuration", "", "Sailing Configuration (*.json)")
         if not path:
             return
 
+        self._load_scenario_from_path(path)
+
+    def _save_scenario_to_path(self, path: str) -> None:
+        self._update_scenario_from_controls()
+        save_scenario(self.scenario, path)
+        self.statusBar().showMessage(f"Saved configuration to {path}")
+
+    def _load_scenario_from_path(self, path: str) -> None:
         self.scenario = load_scenario(path)
+        self.scenario.race_state.is_running = False
+        update_wind_field(self.scenario)
         self.canvas.set_scenario(self.scenario)
         self._set_selected_terrain_index(0 if self.scenario.terrain else None)
         self._refresh_controls_from_scenario()
-        self.statusBar().showMessage(f"Loaded scenario from {path}")
+        self.statusBar().showMessage(f"Loaded configuration from {path}")
 
     def _on_canvas_changed(self) -> None:
         update_wind_field(self.scenario)

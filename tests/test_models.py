@@ -1,6 +1,6 @@
 from sailing_simulator.domain.models import MarkType, RaceFormat, TerrainObject, TerrainType, Vector2, default_scenario
 from sailing_simulator.domain.presets import adapt_course_to_format, course_for_format, remove_invalid_marks
-from sailing_simulator.domain.serialization import scenario_from_dict, scenario_to_dict
+from sailing_simulator.domain.serialization import load_scenario, save_scenario, scenario_from_dict, scenario_to_dict
 from sailing_simulator.domain.validation import validate_course
 
 
@@ -63,6 +63,21 @@ def test_scenario_serialization_round_trip_preserves_terrain():
     assert restored.terrain[0].position == Vector2(250.0, 300.0)
     assert restored.terrain[0].height == 35.0
     assert restored.terrain[0].influence_radius == 140.0
+
+
+def test_saved_configuration_file_preserves_multiple_terrain_objects(tmp_path):
+    scenario = default_scenario()
+    scenario.terrain.append(TerrainObject(TerrainType.TREES, Vector2(250.0, 300.0), 35.0, 140.0))
+    scenario.terrain.append(TerrainObject(TerrainType.CLIFF, Vector2(700.0, 160.0), 80.0, 260.0))
+    path = tmp_path / "terrain_config.json"
+
+    save_scenario(scenario, path)
+    restored = load_scenario(path)
+
+    assert [(terrain.terrain_type, terrain.position, terrain.height, terrain.influence_radius) for terrain in restored.terrain] == [
+        (TerrainType.TREES, Vector2(250.0, 300.0), 35.0, 140.0),
+        (TerrainType.CLIFF, Vector2(700.0, 160.0), 80.0, 260.0),
+    ]
 
 
 def test_adapting_w_course_to_t3_adds_gybe_and_keeps_leeward_mark():

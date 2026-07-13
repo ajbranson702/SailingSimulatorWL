@@ -1,7 +1,8 @@
 from PySide6.QtWidgets import QApplication, QSizePolicy
 
-from sailing_simulator.domain.models import RaceFormat, TerrainType
+from sailing_simulator.domain.models import RaceFormat, TerrainObject, TerrainType, Vector2, default_scenario
 from sailing_simulator.domain.presets import course_for_format
+from sailing_simulator.domain.serialization import save_scenario
 from sailing_simulator.ui.main_window import MainWindow
 
 
@@ -120,6 +121,29 @@ def test_terrain_controls_edit_selected_terrain_only():
     assert len(window.scenario.terrain) == 1
     assert window.scenario.terrain[0].terrain_type == TerrainType.TREES
     assert window.selected_terrain_index == 0
+
+    window.close()
+    app.quit()
+
+
+def test_load_configuration_restores_terrain_and_selects_it(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    scenario = default_scenario()
+    scenario.terrain.append(TerrainObject(TerrainType.BUILDINGS, Vector2(660.0, 180.0), 75.0, 240.0))
+    path = tmp_path / "terrain_config.json"
+    save_scenario(scenario, path)
+
+    window = MainWindow()
+    window._load_scenario_from_path(str(path))
+
+    assert len(window.scenario.terrain) == 1
+    assert window.scenario.terrain[0].terrain_type == TerrainType.BUILDINGS
+    assert window.scenario.terrain[0].position == Vector2(660.0, 180.0)
+    assert window.scenario.terrain[0].height == 75.0
+    assert window.scenario.terrain[0].influence_radius == 240.0
+    assert window.selected_terrain_index == 0
+    assert window.canvas.selected_terrain_index == 0
+    assert window.delete_terrain_button.isEnabled()
 
     window.close()
     app.quit()
