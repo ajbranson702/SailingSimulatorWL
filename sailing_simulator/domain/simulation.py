@@ -3,7 +3,17 @@ from __future__ import annotations
 import itertools
 import math
 
-from sailing_simulator.domain.models import Boat, BoatControlMode, Polar, RaceEvent, RaceEventType, Scenario, Vector2
+from sailing_simulator.domain.models import (
+    Boat,
+    BoatControlMode,
+    Mark,
+    MarkType,
+    Polar,
+    RaceEvent,
+    RaceEventType,
+    Scenario,
+    Vector2,
+)
 from sailing_simulator.domain.race_progress import target_mark_for, total_targets_for
 
 MIN_UPWIND_ANGLE_DEGREES = 45.0
@@ -16,6 +26,7 @@ MARK_COLLISION_RADIUS = 22.0
 def step_scenario(scenario: Scenario, elapsed_seconds: float) -> None:
     from sailing_simulator.domain.wind import update_wind_field
 
+    clamp_boats_to_course(scenario)
     previous_positions = {boat.name: boat.position for boat in scenario.boats}
     scenario.race_state.events = []
     scenario.race_state.elapsed_seconds += elapsed_seconds
@@ -29,6 +40,13 @@ def step_scenario(scenario: Scenario, elapsed_seconds: float) -> None:
 
 def step_boat(boat: Boat, scenario: Scenario, elapsed_seconds: float) -> None:
     from sailing_simulator.domain.wind import wind_at
+
+    if boat.collision_stop_heading is not None:
+        if headings_match(boat.heading_degrees, boat.collision_stop_heading):
+            boat.speed_knots = 0.0
+            append_track_point(boat)
+            return
+        boat.collision_stop_heading = None
 
     wind_direction, wind_speed = wind_at(scenario, boat.position)
     target_speed = target_boat_speed(
@@ -48,7 +66,10 @@ def step_boat(boat: Boat, scenario: Scenario, elapsed_seconds: float) -> None:
         boat.position.x + math.sin(radians) * distance_units,
         boat.position.y - math.cos(radians) * distance_units,
     )
-    boat.position = clamp_to_course(next_position, scenario.course.boundary_width, scenario.course.boundary_height)
+    clamped_position = clamp_to_course(next_position, scenario.course.boundary_width, scenario.course.boundary_height)
+    if clamped_position != next_position:
+        boat.speed_knots = 0.0
+    boat.position = clamped_position
     append_track_point(boat)
 
 
@@ -78,12 +99,14 @@ def steer_toward_wind(boat: Boat, wind_from_degrees: float, degrees: float) -> N
     difference = signed_angle(wind_from_degrees, boat.heading_degrees)
     turn = degrees if difference > 0 else -degrees
     boat.heading_degrees = normalize_degrees(boat.heading_degrees + turn)
+    release_collision_stop_if_heading_changed(boat)
 
 
 def steer_away_from_wind(boat: Boat, wind_from_degrees: float, degrees: float) -> None:
     difference = signed_angle(wind_from_degrees, boat.heading_degrees)
     turn = -degrees if difference > 0 else degrees
     boat.heading_degrees = normalize_degrees(boat.heading_degrees + turn)
+    release_collision_stop_if_heading_changed(boat)
 
 
 def tack(boat: Boat, wind_from_degrees: float) -> None:
@@ -91,6 +114,7 @@ def tack(boat: Boat, wind_from_degrees: float) -> None:
     turn = 90.0 if difference > 0 else -90.0
     boat.heading_degrees = normalize_degrees(boat.heading_degrees + turn)
     boat.speed_knots *= 0.65
+    release_collision_stop_if_heading_changed(boat)
 
 
 def reset_boats_to_start(scenario: Scenario) -> None:
@@ -105,6 +129,8 @@ def reset_boats_to_start(scenario: Scenario) -> None:
         boat.has_started = False
         boat.is_finished = False
         boat.finish_time_seconds = None
+        boat.collision_stop_heading = None
+        boat.collision_released_heading = None
     scenario.race_state.elapsed_seconds = 0.0
     scenario.race_state.events = []
     scenario.race_state.finished_boats = set()
@@ -154,7 +180,9 @@ def detect_course_progress(scenario: Scenario, previous_positions: dict[str, Vec
                 continue
 
             crossing = segment_intersection_parameter(previous, boat.position, start.pin, start.committee_boat)
-            if crossing is None or crossing + 1e-9 < segment_position:
+            finish_mark_crossing = finish_mark_crossing_parameter(scenario, previous, boat.position)
+            crossing = earliest_valid_parameter([crossing, finish_mark_crossing], segment_position)
+            if crossing is None:
                 break
 
             boat.is_finished = True
@@ -192,13 +220,22 @@ def detect_mark_roundings(scenario: Scenario, previous_positions: dict[str, Vect
 
 
 def detect_boat_collisions(scenario: Scenario) -> None:
+    colliding_boats: set[str] = set()
     for first, second in itertools.combinations(scenario.boats, 2):
         if distance(first.position, second.position) <= BOAT_COLLISION_RADIUS:
+            colliding_boats.add(first.name)
+            colliding_boats.add(second.name)
+            stop_for_collision(first)
+            stop_for_collision(second)
             add_event(
                 scenario,
                 RaceEventType.BOAT_COLLISION,
                 f"{first.name} collided with {second.name}.",
             )
+
+    for boat in scenario.boats:
+        if boat.name not in colliding_boats:
+            boat.collision_released_heading = None
 
 
 def detect_mark_collisions(scenario: Scenario) -> None:
@@ -222,6 +259,33 @@ def add_event(scenario: Scenario, event_type: RaceEventType, message: str) -> No
     )
 
 
+def clamp_boats_to_course(scenario: Scenario) -> None:
+    for boat in scenario.boats:
+        clamped_position = clamp_to_course(boat.position, scenario.course.boundary_width, scenario.course.boundary_height)
+        if clamped_position != boat.position:
+            boat.position = clamped_position
+            boat.speed_knots = 0.0
+
+
+def stop_for_collision(boat: Boat) -> None:
+    if boat.collision_released_heading is not None and headings_match(boat.heading_degrees, boat.collision_released_heading):
+        return
+
+    boat.speed_knots = 0.0
+    if boat.collision_stop_heading is None:
+        boat.collision_stop_heading = boat.heading_degrees
+
+
+def release_collision_stop_if_heading_changed(boat: Boat) -> None:
+    if boat.collision_stop_heading is not None and not headings_match(boat.heading_degrees, boat.collision_stop_heading):
+        boat.collision_stop_heading = None
+        boat.collision_released_heading = boat.heading_degrees
+
+
+def headings_match(first: float, second: float) -> bool:
+    return abs(signed_angle(first, second)) < 1e-6
+
+
 def true_wind_angle(heading_degrees: float, wind_from_degrees: float) -> float:
     return abs(signed_angle(wind_from_degrees, heading_degrees))
 
@@ -232,6 +296,27 @@ def signed_angle(source_degrees: float, target_degrees: float) -> float:
 
 def normalize_degrees(degrees: float) -> float:
     return degrees % 360.0
+
+
+def finish_mark_crossing_parameter(scenario: Scenario, segment_start: Vector2, segment_end: Vector2) -> float | None:
+    finish_mark = finish_mark_for(scenario)
+    if finish_mark is None:
+        return None
+    return mark_crossing_parameter(finish_mark.position, segment_start, segment_end, MARK_COLLISION_RADIUS)
+
+
+def finish_mark_for(scenario: Scenario) -> Mark | None:
+    explicit_finish = next((mark for mark in scenario.course.marks if mark.mark_type == MarkType.FINISH), None)
+    if explicit_finish is not None:
+        return explicit_finish
+    return next((mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD), None)
+
+
+def earliest_valid_parameter(parameters: list[float | None], minimum: float) -> float | None:
+    valid = [parameter for parameter in parameters if parameter is not None and parameter + 1e-9 >= minimum]
+    if not valid:
+        return None
+    return min(valid)
 
 
 def bounds_for(values: list[float], target: float) -> tuple[float, float]:

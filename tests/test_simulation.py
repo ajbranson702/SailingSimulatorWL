@@ -2,6 +2,7 @@ from sailing_simulator.domain.models import BoatControlMode, MarkType, RaceEvent
 from sailing_simulator.domain.simulation import (
     detect_race_events,
     step_scenario,
+    steer_away_from_wind,
     tack,
     target_boat_speed,
     true_wind_angle,
@@ -110,6 +111,21 @@ def test_finish_crossing_only_counts_after_required_marks():
     assert any(event.event_type == RaceEventType.FINISH_CROSSED for event in scenario.race_state.events)
 
 
+def test_finish_counts_when_boat_reaches_finish_mark_after_required_marks():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    boat.target_leg_index = 1
+    finish = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.LEEWARD)
+    previous = Vector2(finish.position.x, finish.position.y - 80.0)
+    boat.position = Vector2(finish.position.x, finish.position.y + 80.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.is_finished
+    assert boat.name in scenario.race_state.finished_boats
+
+
 def test_progress_can_round_last_mark_and_finish_in_one_large_step():
     scenario = default_scenario()
     boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
@@ -138,6 +154,41 @@ def test_boat_collision_creates_event():
     detect_race_events(scenario, {})
 
     assert any(event.event_type == RaceEventType.BOAT_COLLISION for event in scenario.race_state.events)
+
+
+def test_boat_collision_stops_both_boats_until_heading_changes():
+    scenario = default_scenario()
+    first, second = scenario.boats[0], scenario.boats[1]
+    first.position = Vector2(400.0, 400.0)
+    second.position = Vector2(410.0, 400.0)
+    first.speed_knots = 5.0
+    second.speed_knots = 4.0
+
+    detect_race_events(scenario, {})
+
+    assert first.speed_knots == 0.0
+    assert second.speed_knots == 0.0
+    assert first.collision_stop_heading == first.heading_degrees
+    step_scenario(scenario, 1.0)
+    assert first.speed_knots == 0.0
+
+    steer_away_from_wind(first, scenario.wind_model.base_direction_degrees, 5.0)
+    step_scenario(scenario, 1.0)
+
+    assert first.collision_stop_heading is None
+
+
+def test_boat_is_clamped_and_stopped_at_course_boundary():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.position = Vector2(scenario.course.boundary_width - 1.0, 450.0)
+    boat.heading_degrees = 90.0
+    boat.speed_knots = 20.0
+
+    step_scenario(scenario, 10.0)
+
+    assert boat.position.x == scenario.course.boundary_width
+    assert boat.speed_knots == 0.0
 
 
 def test_mark_collision_creates_event():

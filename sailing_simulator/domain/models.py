@@ -89,6 +89,8 @@ class Boat:
     has_started: bool = False
     is_finished: bool = False
     finish_time_seconds: float | None = None
+    collision_stop_heading: float | None = None
+    collision_released_heading: float | None = None
 
 
 @dataclass

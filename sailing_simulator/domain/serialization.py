@@ -152,6 +152,8 @@ def boat_to_dict(boat: Boat) -> dict[str, Any]:
         "has_started": boat.has_started,
         "is_finished": boat.is_finished,
         "finish_time_seconds": boat.finish_time_seconds,
+        "collision_stop_heading": boat.collision_stop_heading,
+        "collision_released_heading": boat.collision_released_heading,
     }
 
 
@@ -167,6 +169,8 @@ def boat_from_dict(data: dict[str, Any]) -> Boat:
         has_started=bool(data.get("has_started", False)),
         is_finished=bool(data.get("is_finished", False)),
         finish_time_seconds=data.get("finish_time_seconds"),
+        collision_stop_heading=data.get("collision_stop_heading"),
+        collision_released_heading=data.get("collision_released_heading"),
     )
 
 

@@ -42,10 +42,13 @@ class CourseCanvas(QWidget):
         painter.fillRect(rect, QColor("#d8f0f7"))
 
         self._draw_course_boundary(painter, rect)
+        painter.save()
+        painter.setClipRect(rect)
         self._draw_wind_grid(painter, rect)
         self._draw_course_objects(painter, rect)
         self._draw_tracks(painter, rect)
         self._draw_boats(painter, rect)
+        painter.restore()
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() != Qt.MouseButton.LeftButton:
