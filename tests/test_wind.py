@@ -1,4 +1,4 @@
-from sailing_simulator.domain.models import Vector2, WindMode, default_scenario
+from sailing_simulator.domain.models import TerrainObject, TerrainType, Vector2, WindMode, default_scenario
 from sailing_simulator.domain.wind import direction_at, update_wind_field, wind_at
 
 
@@ -56,3 +56,41 @@ def test_update_wind_field_populates_cells():
     update_wind_field(scenario)
 
     assert len(scenario.wind_field.cells) == scenario.wind_field.columns * scenario.wind_field.rows
+
+
+def test_terrain_reduces_and_bends_downwind_airflow():
+    scenario = default_scenario()
+    scenario.wind_model.base_direction_degrees = 0.0
+    scenario.wind_model.base_speed_knots = 10.0
+    scenario.terrain.append(
+        TerrainObject(
+            terrain_type=TerrainType.BUILDINGS,
+            position=Vector2(450.0, 250.0),
+            height=100.0,
+            influence_radius=160.0,
+        )
+    )
+
+    direction, speed = wind_at(scenario, Vector2(510.0, 390.0))
+
+    assert speed < 10.0
+    assert direction != 0.0
+
+
+def test_terrain_upwind_of_object_does_not_change_airflow():
+    scenario = default_scenario()
+    scenario.wind_model.base_direction_degrees = 0.0
+    scenario.wind_model.base_speed_knots = 10.0
+    scenario.terrain.append(
+        TerrainObject(
+            terrain_type=TerrainType.HILL,
+            position=Vector2(450.0, 250.0),
+            height=100.0,
+            influence_radius=160.0,
+        )
+    )
+
+    direction, speed = wind_at(scenario, Vector2(450.0, 120.0))
+
+    assert direction == 0.0
+    assert speed == 10.0

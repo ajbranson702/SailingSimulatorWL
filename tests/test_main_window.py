@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QApplication, QSizePolicy
 
-from sailing_simulator.domain.models import RaceFormat
+from sailing_simulator.domain.models import RaceFormat, TerrainType
 from sailing_simulator.domain.presets import course_for_format
 from sailing_simulator.ui.main_window import MainWindow
 
@@ -42,6 +42,44 @@ def test_scenario_controls_keep_stable_widths():
     assert all(control.minimumWidth() >= 170 for control in controls)
     assert all(control.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Expanding for control in controls)
     assert window.status.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Ignored
+
+    window.close()
+    app.quit()
+
+
+def test_terrain_controls_add_update_and_delete_terrain():
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+
+    assert window.scenario.terrain == []
+    assert not window.delete_terrain_button.isEnabled()
+    assert window.terrain_type.isEnabled()
+    assert window.terrain_height.isEnabled()
+    assert window.terrain_radius.isEnabled()
+
+    window.terrain_type.setCurrentIndex(window.terrain_type.findData(TerrainType.TREES.value))
+    window.terrain_height.setValue(55.0)
+    window.terrain_radius.setValue(180.0)
+    window._add_terrain()
+
+    assert len(window.scenario.terrain) == 1
+    assert window.scenario.terrain[0].terrain_type == TerrainType.TREES
+    assert window.scenario.terrain[0].height == 55.0
+    assert window.scenario.terrain[0].influence_radius == 180.0
+    assert window.delete_terrain_button.isEnabled()
+
+    window.terrain_type.setCurrentIndex(window.terrain_type.findData(TerrainType.CLIFF.value))
+    window.terrain_height.setValue(70.0)
+    window.terrain_radius.setValue(220.0)
+
+    assert window.scenario.terrain[0].terrain_type == TerrainType.CLIFF
+    assert window.scenario.terrain[0].height == 70.0
+    assert window.scenario.terrain[0].influence_radius == 220.0
+
+    window._delete_selected_terrain()
+
+    assert window.scenario.terrain == []
+    assert not window.delete_terrain_button.isEnabled()
 
     window.close()
     app.quit()

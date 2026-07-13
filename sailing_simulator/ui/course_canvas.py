@@ -7,7 +7,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QWidget
 
-from sailing_simulator.domain.models import BoatControlMode, Scenario, Vector2
+from sailing_simulator.domain.models import BoatControlMode, Scenario, TerrainType, Vector2
 from sailing_simulator.domain.wind import update_wind_field, wind_at
 
 
@@ -45,6 +45,7 @@ class CourseCanvas(QWidget):
         painter.save()
         painter.setClipRect(rect)
         self._draw_wind_grid(painter, rect)
+        self._draw_terrain(painter, rect)
         self._draw_course_objects(painter, rect)
         self._draw_tracks(painter, rect)
         self._draw_boats(painter, rect)
@@ -130,6 +131,31 @@ class CourseCanvas(QWidget):
             center = self._to_screen(mark.position, rect)
             painter.drawEllipse(center, 12, 12)
             painter.drawText(center + QPointF(14, 5), mark.label)
+
+    def _draw_terrain(self, painter: QPainter, rect: QRectF) -> None:
+        for terrain in self.scenario.terrain:
+            center = self._to_screen(terrain.position, rect)
+            radius = (terrain.influence_radius / self.scenario.course.boundary_width) * rect.width()
+            color = self._terrain_color(terrain.terrain_type)
+            shadow = QColor(color)
+            shadow.setAlpha(45)
+            painter.setPen(QPen(color.darker(125), 2))
+            painter.setBrush(shadow)
+            painter.drawEllipse(center, radius, radius)
+            painter.setBrush(color)
+            painter.drawEllipse(center, 13, 13)
+            painter.setPen(QPen(QColor("#1f2933"), 1))
+            painter.drawText(center + QPointF(15, 5), terrain.terrain_type.value.title())
+
+    def _terrain_color(self, terrain_type: TerrainType) -> QColor:
+        colors = {
+            TerrainType.HILL: QColor("#8aa05a"),
+            TerrainType.SHORELINE: QColor("#c4a66a"),
+            TerrainType.BUILDINGS: QColor("#8d9299"),
+            TerrainType.TREES: QColor("#3f8f5a"),
+            TerrainType.CLIFF: QColor("#9a7b61"),
+        }
+        return colors[terrain_type]
 
     def _draw_tracks(self, painter: QPainter, rect: QRectF) -> None:
         for boat in self.scenario.boats:
@@ -228,6 +254,9 @@ class CourseCanvas(QWidget):
         for index, mark in enumerate(self.scenario.course.marks):
             candidates.append((self._distance(position, self._to_screen(mark.position, rect)), DragTarget("mark", index)))
 
+        for index, terrain in enumerate(self.scenario.terrain):
+            candidates.append((self._distance(position, self._to_screen(terrain.position, rect)), DragTarget("terrain", index)))
+
         if self._can_drag_boats():
             for index, boat in enumerate(self.scenario.boats):
                 candidates.append((self._distance(position, self._to_screen(boat.position, rect)), DragTarget("boat", index)))
@@ -247,6 +276,9 @@ class CourseCanvas(QWidget):
             course.start_line.committee_boat = course_point
         elif self._drag_target.kind == "mark" and self._drag_target.index is not None:
             course.marks[self._drag_target.index].position = course_point
+        elif self._drag_target.kind == "terrain" and self._drag_target.index is not None:
+            self.scenario.terrain[self._drag_target.index].position = course_point
+            update_wind_field(self.scenario)
         elif self._drag_target.kind == "boat" and self._drag_target.index is not None and self._can_drag_boats():
             boat = self.scenario.boats[self._drag_target.index]
             boat.position = course_point

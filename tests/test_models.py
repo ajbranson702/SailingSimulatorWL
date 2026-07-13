@@ -1,4 +1,4 @@
-from sailing_simulator.domain.models import MarkType, RaceFormat, default_scenario
+from sailing_simulator.domain.models import MarkType, RaceFormat, TerrainObject, TerrainType, Vector2, default_scenario
 from sailing_simulator.domain.presets import adapt_course_to_format, course_for_format, remove_invalid_marks
 from sailing_simulator.domain.serialization import scenario_from_dict, scenario_to_dict
 from sailing_simulator.domain.validation import validate_course
@@ -50,6 +50,19 @@ def test_scenario_serialization_round_trip_preserves_course():
         MarkType.GYBE,
         MarkType.LEEWARD,
     ]
+
+
+def test_scenario_serialization_round_trip_preserves_terrain():
+    scenario = default_scenario()
+    scenario.terrain.append(TerrainObject(TerrainType.TREES, Vector2(250.0, 300.0), 35.0, 140.0))
+
+    restored = scenario_from_dict(scenario_to_dict(scenario))
+
+    assert len(restored.terrain) == 1
+    assert restored.terrain[0].terrain_type == TerrainType.TREES
+    assert restored.terrain[0].position == Vector2(250.0, 300.0)
+    assert restored.terrain[0].height == 35.0
+    assert restored.terrain[0].influence_radius == 140.0
 
 
 def test_adapting_w_course_to_t3_adds_gybe_and_keeps_leeward_mark():

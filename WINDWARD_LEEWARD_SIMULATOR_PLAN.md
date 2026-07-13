@@ -380,6 +380,8 @@ Status: initial AI fleet implementation complete.
 
 Deliverable: user can add terrain and see it alter wind behavior.
 
+Status: initial terrain placement and wind-effect implementation complete.
+
 ### Phase 8: Polish, Packaging, and Scenario Library
 
 - Improve UI layout and visual clarity.

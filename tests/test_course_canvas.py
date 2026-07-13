@@ -1,7 +1,7 @@
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from sailing_simulator.domain.models import default_scenario
+from sailing_simulator.domain.models import TerrainObject, TerrainType, Vector2, default_scenario
 from sailing_simulator.ui.course_canvas import CourseCanvas, DragTarget
 
 
@@ -42,5 +42,25 @@ def test_boats_can_only_be_dragged_before_race_start():
 
     target = canvas._hit_test(canvas._to_screen(boat.position, canvas._course_rect()))
     assert target is None or target.kind != "boat"
+
+    app.quit()
+
+
+def test_terrain_can_be_dragged_on_canvas():
+    app = QApplication.instance() or QApplication([])
+    scenario = default_scenario()
+    scenario.terrain.append(TerrainObject(TerrainType.HILL, Vector2(250.0, 250.0), 45.0, 150.0))
+    canvas = CourseCanvas(scenario)
+    canvas.resize(900, 900)
+
+    terrain_screen_position = canvas._to_screen(scenario.terrain[0].position, canvas._course_rect())
+
+    assert canvas._hit_test(terrain_screen_position).kind == "terrain"
+
+    canvas._drag_target = DragTarget("terrain", 0)
+    canvas._move_drag_target(canvas._to_screen(Vector2(400.0, 420.0), canvas._course_rect()))
+
+    assert scenario.terrain[0].position.x == pytest.approx(400.0)
+    assert scenario.terrain[0].position.y == pytest.approx(420.0)
 
     app.quit()

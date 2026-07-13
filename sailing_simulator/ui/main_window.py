@@ -21,7 +21,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sailing_simulator.domain.models import Boat, BoatControlMode, RaceFormat, Vector2, WindMode, default_scenario
+from sailing_simulator.domain.models import (
+    Boat,
+    BoatControlMode,
+    RaceFormat,
+    TerrainObject,
+    TerrainType,
+    Vector2,
+    WindMode,
+    default_scenario,
+)
 from sailing_simulator.domain.presets import (
     adapt_course_to_format,
     add_gybe_mark,
@@ -200,6 +209,43 @@ class MainWindow(QMainWindow):
         file_actions.addWidget(load)
         layout.addLayout(file_actions)
 
+        layout.addWidget(self._section_label("Terrain"))
+
+        terrain_form = QFormLayout()
+        terrain_form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.terrain_type = QComboBox()
+        for terrain_type in TerrainType:
+            self.terrain_type.addItem(terrain_type.value.title(), terrain_type.value)
+        self.terrain_type.currentIndexChanged.connect(self._update_selected_terrain_from_controls)
+        self._stabilize_control(self.terrain_type)
+        terrain_form.addRow("Type", self.terrain_type)
+
+        self.terrain_height = QDoubleSpinBox()
+        self.terrain_height.setRange(0.0, 100.0)
+        self.terrain_height.setSuffix(" m")
+        self.terrain_height.setValue(45.0)
+        self.terrain_height.valueChanged.connect(self._update_selected_terrain_from_controls)
+        self._stabilize_control(self.terrain_height)
+        terrain_form.addRow("Height", self.terrain_height)
+
+        self.terrain_radius = QDoubleSpinBox()
+        self.terrain_radius.setRange(25.0, 350.0)
+        self.terrain_radius.setSuffix(" u")
+        self.terrain_radius.setValue(150.0)
+        self.terrain_radius.valueChanged.connect(self._update_selected_terrain_from_controls)
+        self._stabilize_control(self.terrain_radius)
+        terrain_form.addRow("Radius", self.terrain_radius)
+        layout.addLayout(terrain_form)
+
+        terrain_actions = QHBoxLayout()
+        self.add_terrain_button = QPushButton("Add Terrain")
+        self.add_terrain_button.clicked.connect(self._add_terrain)
+        self.delete_terrain_button = QPushButton("Delete Terrain")
+        self.delete_terrain_button.clicked.connect(self._delete_selected_terrain)
+        terrain_actions.addWidget(self.add_terrain_button)
+        terrain_actions.addWidget(self.delete_terrain_button)
+        layout.addLayout(terrain_actions)
+
         layout.addWidget(self._section_label("Playback"))
 
         playback = QHBoxLayout()
@@ -350,6 +396,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Loaded scenario from {path}")
 
     def _on_canvas_changed(self) -> None:
+        update_wind_field(self.scenario)
+        self._refresh_terrain_controls()
         self._refresh_boat_status()
         self.statusBar().showMessage("Scenario layout updated")
 
@@ -413,11 +461,66 @@ class MainWindow(QMainWindow):
         self.gust_percent.setValue(self.scenario.wind_model.gust_percent)
         self.time_scale.setValue(self.scenario.race_state.time_scale)
         self._refresh_course_controls()
+        self._refresh_terrain_controls()
         self._refresh_boat_status()
 
     def _refresh_course_controls(self) -> None:
         self.add_gybe_mark_button.setEnabled(self.scenario.course.race_format == RaceFormat.T3)
         self.delete_invalid_marks_button.setEnabled(bool(invalid_marks_for(self.scenario.course)))
+
+    def _refresh_terrain_controls(self) -> None:
+        terrain = self._selected_terrain()
+        has_terrain = terrain is not None
+        self.delete_terrain_button.setEnabled(has_terrain)
+        if terrain is None:
+            return
+
+        self.terrain_type.blockSignals(True)
+        self.terrain_type.setCurrentIndex(self.terrain_type.findData(terrain.terrain_type.value))
+        self.terrain_type.blockSignals(False)
+        self.terrain_height.blockSignals(True)
+        self.terrain_height.setValue(terrain.height)
+        self.terrain_height.blockSignals(False)
+        self.terrain_radius.blockSignals(True)
+        self.terrain_radius.setValue(terrain.influence_radius)
+        self.terrain_radius.blockSignals(False)
+
+    def _selected_terrain(self) -> TerrainObject | None:
+        if not self.scenario.terrain:
+            return None
+        return self.scenario.terrain[-1]
+
+    def _add_terrain(self) -> None:
+        terrain = TerrainObject(
+            terrain_type=TerrainType(self.terrain_type.currentData() or TerrainType.HILL.value),
+            position=Vector2(self.scenario.course.boundary_width * 0.35, self.scenario.course.boundary_height * 0.35),
+            height=self.terrain_height.value(),
+            influence_radius=self.terrain_radius.value(),
+        )
+        self.scenario.terrain.append(terrain)
+        update_wind_field(self.scenario)
+        self.canvas.update()
+        self._refresh_terrain_controls()
+        self.statusBar().showMessage("Terrain added")
+
+    def _delete_selected_terrain(self) -> None:
+        if not self.scenario.terrain:
+            return
+        self.scenario.terrain.pop()
+        update_wind_field(self.scenario)
+        self.canvas.update()
+        self._refresh_terrain_controls()
+        self.statusBar().showMessage("Terrain deleted")
+
+    def _update_selected_terrain_from_controls(self) -> None:
+        terrain = self._selected_terrain()
+        if terrain is None:
+            return
+        terrain.terrain_type = TerrainType(self.terrain_type.currentData())
+        terrain.height = self.terrain_height.value()
+        terrain.influence_radius = self.terrain_radius.value()
+        update_wind_field(self.scenario)
+        self.canvas.update()
 
     def _refresh_boat_status(self) -> None:
         user_boat = self._user_boat()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-from sailing_simulator.domain.models import Scenario, Vector2, WindCell, WindMode, WindModel
+from sailing_simulator.domain.models import Scenario, TerrainObject, TerrainType, Vector2, WindCell, WindMode, WindModel
 
 
 def update_wind_field(scenario: Scenario) -> None:
@@ -21,7 +21,9 @@ def update_wind_field(scenario: Scenario) -> None:
 def wind_at(scenario: Scenario, position: Vector2) -> tuple[float, float]:
     model = scenario.wind_model
     elapsed = scenario.race_state.elapsed_seconds
-    return direction_at(model, elapsed), speed_at(model, elapsed, position)
+    direction = direction_at(model, elapsed)
+    speed = speed_at(model, elapsed, position)
+    return apply_terrain_effects(scenario, position, direction, speed)
 
 
 def direction_at(model: WindModel, elapsed_seconds: float) -> float:
@@ -52,6 +54,66 @@ def speed_at(model: WindModel, elapsed_seconds: float, position: Vector2) -> flo
 
     wave = math.sin(elapsed_seconds / 18.0 + position.x / 170.0 + position.y / 230.0)
     return max(0.0, model.base_speed_knots * (1.0 + gust_factor * wave))
+
+
+def apply_terrain_effects(
+    scenario: Scenario,
+    position: Vector2,
+    direction_degrees: float,
+    speed_knots: float,
+) -> tuple[float, float]:
+    direction = direction_degrees
+    speed = speed_knots
+    for terrain in scenario.terrain:
+        direction, speed = apply_single_terrain_effect(terrain, position, direction, speed)
+    return normalize_degrees(direction), max(0.0, speed)
+
+
+def apply_single_terrain_effect(
+    terrain: TerrainObject,
+    position: Vector2,
+    direction_degrees: float,
+    speed_knots: float,
+) -> tuple[float, float]:
+    radius = max(terrain.influence_radius, 1.0)
+    dx = position.x - terrain.position.x
+    dy = position.y - terrain.position.y
+    downwind = wind_downwind_unit(direction_degrees)
+    side = Vector2(-downwind.y, downwind.x)
+    downwind_distance = dx * downwind.x + dy * downwind.y
+    lateral_distance = dx * side.x + dy * side.y
+
+    if downwind_distance < 0.0 or downwind_distance > radius * 2.25:
+        return direction_degrees, speed_knots
+    if abs(lateral_distance) > radius:
+        return direction_degrees, speed_knots
+
+    type_factor = terrain_type_factor(terrain.terrain_type)
+    height_factor = max(0.0, min(1.0, terrain.height / 100.0))
+    downwind_fade = 1.0 - downwind_distance / (radius * 2.25)
+    lateral_fade = 1.0 - abs(lateral_distance) / radius
+    influence = max(0.0, downwind_fade * lateral_fade * height_factor * type_factor)
+
+    speed_reduction = min(0.75, influence * 0.65)
+    deflection = math.copysign(18.0 * influence, lateral_distance if abs(lateral_distance) > 1e-9 else 1.0)
+    turbulence = math.sin((position.x + position.y) / 55.0) * 4.0 * influence
+    return normalize_degrees(direction_degrees + deflection + turbulence), speed_knots * (1.0 - speed_reduction)
+
+
+def wind_downwind_unit(direction_degrees: float) -> Vector2:
+    radians = math.radians(direction_degrees + 180.0)
+    return Vector2(math.sin(radians), -math.cos(radians))
+
+
+def terrain_type_factor(terrain_type: TerrainType) -> float:
+    factors = {
+        TerrainType.HILL: 0.75,
+        TerrainType.SHORELINE: 0.45,
+        TerrainType.BUILDINGS: 1.0,
+        TerrainType.TREES: 0.7,
+        TerrainType.CLIFF: 0.9,
+    }
+    return factors[terrain_type]
 
 
 def oscillation(model: WindModel, elapsed_seconds: float) -> float:
