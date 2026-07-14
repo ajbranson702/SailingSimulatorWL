@@ -36,6 +36,7 @@ AI_LEEWARD_ROUNDING_OFFSET = 80.0
 AI_LEEWARD_ROUNDING_ADVANCE = 92.0
 AI_CLOSE_TARGET_RADIUS = 85.0
 AI_ROUNDING_WAYPOINT_RADIUS = 70.0
+AI_MARK_TRAFFIC_ZONE_RADIUS = AI_MARK_APPROACH_DISTANCE + AI_MARK_ROUNDING_OFFSET + BOAT_LENGTH_UNITS
 AI_BOUNDARY_MARGIN = 75.0
 AI_MARK_AVOIDANCE_LOOKAHEAD = 140.0
 AI_MARK_AVOIDANCE_RADIUS = 42.0
@@ -470,6 +471,8 @@ def collision_avoidance_maneuver(boat: Boat, scenario: Scenario) -> str | None:
             continue
         if not boats_have_projected_collision(boat, other, AI_COLLISION_AVOIDANCE_LOOKAHEAD_SECONDS):
             continue
+        if boats_are_in_same_mark_traffic_zone(boat, other, scenario):
+            continue
         if boat_should_keep_clear(boat, other, scenario):
             return avoidance_maneuver_for_leg(boat, scenario)
     return None
@@ -491,6 +494,20 @@ def boat_should_keep_clear(boat: Boat, other: Boat, scenario: Scenario) -> bool:
 
 def avoidance_maneuver_for_leg(boat: Boat, scenario: Scenario) -> str:
     return "tack" if boat_is_on_upwind_leg(boat, scenario) else "gybe"
+
+
+def boats_are_in_same_mark_traffic_zone(first: Boat, second: Boat, scenario: Scenario) -> bool:
+    if first.target_leg_index != second.target_leg_index:
+        return False
+
+    target = target_mark_for(scenario.course, first.target_leg_index)
+    if target is None:
+        return False
+
+    return (
+        distance(first.position, target.position) <= AI_MARK_TRAFFIC_ZONE_RADIUS
+        and distance(second.position, target.position) <= AI_MARK_TRAFFIC_ZONE_RADIUS
+    )
 
 
 def boats_have_projected_collision(first: Boat, second: Boat, lookahead_seconds: float) -> bool:

@@ -845,6 +845,25 @@ def test_same_tack_windward_ai_tacks_before_projected_upwind_collision():
     assert windward_ai.speed_knots == 6.5
 
 
+def test_ai_keeps_rounding_waypoint_priority_in_windward_mark_traffic():
+    scenario = default_scenario()
+    windward_mark = next(mark for mark in scenario.course.marks if mark.mark_type == MarkType.WINDWARD)
+    windward_ai, leeward_ai = [boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI]
+    windward_ai.has_started = True
+    leeward_ai.has_started = True
+    windward_ai.target_leg_index = 0
+    leeward_ai.target_leg_index = 0
+    windward_ai.position = Vector2(windward_mark.position.x - 20.0, windward_mark.position.y + 90.0)
+    leeward_ai.position = Vector2(windward_mark.position.x - 45.0, windward_mark.position.y + 95.0)
+    windward_ai.heading_degrees = 285.0
+    leeward_ai.heading_degrees = 290.0
+    windward_ai.speed_knots = 10.0
+    leeward_ai.speed_knots = 10.0
+    scenario.race_state.elapsed_seconds = 20.0
+
+    assert collision_avoidance_maneuver(windward_ai, scenario) is None
+
+
 def test_same_tack_leeward_ai_holds_right_of_way_before_projected_collision():
     scenario = default_scenario()
     leeward_ai = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
