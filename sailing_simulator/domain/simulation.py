@@ -21,6 +21,7 @@ MIN_UPWIND_ANGLE_DEGREES = 45.0
 COURSE_UNITS_PER_NAUTICAL_MILE = 1800.0
 MAX_TRACK_POINTS = 300
 BOAT_COLLISION_RADIUS = 28.0
+BOAT_LENGTH_UNITS = 28.0
 MARK_COLLISION_RADIUS = 22.0
 START_FINISH_LINE_EXTENSION = 45.0
 START_FINISH_LINE_TOUCH_RADIUS = 18.0
@@ -44,6 +45,9 @@ AI_COLLISION_ESCAPE_MAX_SECONDS = 28.0
 AI_UPWIND_ANGLE = 45.0
 AI_DOWNWIND_ANGLE = 35.0
 AI_START_STRATEGIES = ("middle", "committee", "pin", "port")
+AI_COLLISION_AVOIDANCE_LOOKAHEAD_SECONDS = 4.0
+AI_COLLISION_AVOIDANCE_COOLDOWN_SECONDS = 6.0
+AI_COLLISION_AVOIDANCE_TRIGGER_DISTANCE = BOAT_COLLISION_RADIUS + BOAT_LENGTH_UNITS * 0.75
 PENALTY_TURN_DEGREES = 720.0
 PENALTY_TURN_RATE_DEGREES_PER_SECOND = 90.0
 
@@ -88,6 +92,12 @@ def update_ai_heading(boat: Boat, scenario: Scenario) -> None:
             release_collision_stop_if_heading_changed(boat)
             return
         boat.ai_collision_escape_heading = None
+
+    if should_tack_to_avoid_collision(boat, scenario):
+        tack(boat, wind_at(scenario, boat.position)[0])
+        boat.ai_board = -boat.ai_board if boat.ai_board is not None else None
+        boat.ai_last_maneuver_seconds = scenario.race_state.elapsed_seconds
+        return
 
     target_position = ai_target_position(boat, scenario)
     wind_direction, wind_speed = wind_at(scenario, boat.position)
@@ -441,6 +451,52 @@ def should_change_ai_board(
     current_score = ai_board_vmg_score(boat, scenario, target_position, leg_mode, wind_direction, wind_speed, boat.ai_board)
     opposite_score = ai_board_vmg_score(boat, scenario, target_position, leg_mode, wind_direction, wind_speed, -boat.ai_board)
     return opposite_score > max(0.1, current_score * 1.35)
+
+
+def should_tack_to_avoid_collision(boat: Boat, scenario: Scenario) -> bool:
+    if not boat_is_on_upwind_leg(boat, scenario):
+        return False
+    if scenario.race_state.elapsed_seconds - boat.ai_last_maneuver_seconds < AI_COLLISION_AVOIDANCE_COOLDOWN_SECONDS:
+        return False
+
+    for other in scenario.boats:
+        if other is boat or other.is_finished or other.penalty_turn_remaining_degrees > 0.0:
+            continue
+        if distance(boat.position, other.position) > AI_COLLISION_AVOIDANCE_TRIGGER_DISTANCE:
+            continue
+        if boats_have_projected_collision(boat, other, AI_COLLISION_AVOIDANCE_LOOKAHEAD_SECONDS):
+            return True
+    return False
+
+
+def boats_have_projected_collision(first: Boat, second: Boat, lookahead_seconds: float) -> bool:
+    first_velocity = velocity_units_per_second(first)
+    second_velocity = velocity_units_per_second(second)
+    relative_position = Vector2(second.position.x - first.position.x, second.position.y - first.position.y)
+    relative_velocity = Vector2(second_velocity.x - first_velocity.x, second_velocity.y - first_velocity.y)
+    relative_speed_squared = dot(relative_velocity, relative_velocity)
+    if relative_speed_squared < 1e-9:
+        return False
+
+    closing_rate = dot(relative_position, relative_velocity)
+    if closing_rate >= 0.0:
+        return False
+
+    closest_time = max(0.0, min(lookahead_seconds, -closing_rate / relative_speed_squared))
+    closest_position = Vector2(
+        relative_position.x + relative_velocity.x * closest_time,
+        relative_position.y + relative_velocity.y * closest_time,
+    )
+    return math.hypot(closest_position.x, closest_position.y) <= BOAT_COLLISION_RADIUS
+
+
+def velocity_units_per_second(boat: Boat) -> Vector2:
+    speed_units_per_second = boat.speed_knots * COURSE_UNITS_PER_NAUTICAL_MILE / 3600.0
+    radians = math.radians(boat.heading_degrees)
+    return Vector2(
+        math.sin(radians) * speed_units_per_second,
+        -math.cos(radians) * speed_units_per_second,
+    )
 
 
 def ai_leg_mode(wind_direction: float, target_bearing: float) -> str:

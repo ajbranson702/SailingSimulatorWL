@@ -27,10 +27,12 @@ from sailing_simulator.domain.simulation import (
     step_boat,
     step_scenario,
     steer_away_from_wind,
+    should_tack_to_avoid_collision,
     tack,
     target_boat_speed,
     true_wind_angle,
     turn_toward_heading,
+    update_ai_heading,
 )
 
 
@@ -783,6 +785,43 @@ def test_ai_boat_taking_penalty_turn_does_not_steer_tactically_first():
 
     assert boat.heading_degrees == 135.0
     assert boat.penalty_turn_remaining_degrees == 630.0
+
+
+def test_ai_boat_tacks_before_projected_upwind_collision():
+    scenario = default_scenario()
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    other_boat = scenario.boats[0]
+    ai_boat.has_started = True
+    other_boat.has_started = True
+    ai_boat.position = Vector2(400.0, 400.0)
+    other_boat.position = Vector2(435.0, 400.0)
+    ai_boat.heading_degrees = 45.0
+    other_boat.heading_degrees = 315.0
+    ai_boat.speed_knots = 10.0
+    other_boat.speed_knots = 10.0
+    scenario.race_state.elapsed_seconds = 20.0
+
+    update_ai_heading(ai_boat, scenario)
+
+    assert ai_boat.heading_degrees == 315.0
+    assert ai_boat.speed_knots == 6.5
+
+
+def test_ai_boat_does_not_tack_before_projected_collision_outside_close_zone():
+    scenario = default_scenario()
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    other_boat = scenario.boats[0]
+    ai_boat.has_started = True
+    other_boat.has_started = True
+    ai_boat.position = Vector2(400.0, 400.0)
+    other_boat.position = Vector2(470.0, 400.0)
+    ai_boat.heading_degrees = 45.0
+    other_boat.heading_degrees = 315.0
+    ai_boat.speed_knots = 10.0
+    other_boat.speed_knots = 10.0
+    scenario.race_state.elapsed_seconds = 20.0
+
+    assert not should_tack_to_avoid_collision(ai_boat, scenario)
 
 
 def test_ai_collision_escape_holds_separate_directions_for_random_periods():
