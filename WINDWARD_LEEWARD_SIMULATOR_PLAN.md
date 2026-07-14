@@ -406,12 +406,12 @@ Status: deferred until the app is ready for releasable packaging.
 - Add start-line timing behavior, including early-start detection and recall/penalty options.
 - Record rules incidents in the event log with involved boats and rule category.
 - Add a simple penalty model, such as a penalty turn or time penalty.
-- Add predictive AI collision avoidance so keep-clear boats tack before contact when a crossing is unsafe.
+- Add predictive AI collision avoidance so keep-clear boats tack or gybe before contact when a crossing is unsafe.
 - Add tests for common rules situations and mark-room scenarios.
 
 Deliverable: starts, AI decisions, and user boat interactions follow the core Racing Rules of Sailing well enough for tactical experimentation.
 
-Status: started. Initial start-sequence, early-start detection, AI pre-start strategy behavior, upwind port/starboard two-turn penalties, penalty tracking, and predictive AI collision avoidance are implemented.
+Status: started. Initial start-sequence, early-start detection, AI pre-start strategy behavior, upwind port/starboard two-turn penalties, same-tack windward/leeward penalties, penalty tracking, and predictive AI collision avoidance are implemented.
 
 Implementation approach:
 

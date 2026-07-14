@@ -20,6 +20,7 @@ from sailing_simulator.domain.simulation import (
     ai_target_position,
     bearing_to,
     best_vmg_heading,
+    collision_avoidance_maneuver,
     detect_race_events,
     gybe,
     reset_boats_to_start,
@@ -822,6 +823,87 @@ def test_ai_boat_does_not_tack_before_projected_collision_outside_close_zone():
     scenario.race_state.elapsed_seconds = 20.0
 
     assert not should_tack_to_avoid_collision(ai_boat, scenario)
+
+
+def test_same_tack_windward_ai_tacks_before_projected_upwind_collision():
+    scenario = default_scenario()
+    windward_ai = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    leeward_boat = scenario.boats[0]
+    windward_ai.has_started = True
+    leeward_boat.has_started = True
+    windward_ai.position = Vector2(400.0, 400.0)
+    leeward_boat.position = Vector2(375.0, 405.0)
+    windward_ai.heading_degrees = 285.0
+    leeward_boat.heading_degrees = 290.0
+    windward_ai.speed_knots = 10.0
+    leeward_boat.speed_knots = 10.0
+    scenario.race_state.elapsed_seconds = 20.0
+
+    update_ai_heading(windward_ai, scenario)
+
+    assert windward_ai.heading_degrees == 15.0
+    assert windward_ai.speed_knots == 6.5
+
+
+def test_same_tack_leeward_ai_holds_right_of_way_before_projected_collision():
+    scenario = default_scenario()
+    leeward_ai = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    windward_boat = scenario.boats[0]
+    leeward_ai.has_started = True
+    windward_boat.has_started = True
+    leeward_ai.position = Vector2(375.0, 405.0)
+    windward_boat.position = Vector2(400.0, 400.0)
+    leeward_ai.heading_degrees = 290.0
+    windward_boat.heading_degrees = 285.0
+    leeward_ai.speed_knots = 10.0
+    windward_boat.speed_knots = 10.0
+    scenario.race_state.elapsed_seconds = 20.0
+
+    assert collision_avoidance_maneuver(leeward_ai, scenario) is None
+
+
+def test_same_tack_windward_ai_gybes_before_projected_downwind_collision():
+    scenario = default_scenario()
+    windward_ai = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    leeward_boat = scenario.boats[0]
+    windward_ai.has_started = True
+    leeward_boat.has_started = True
+    windward_ai.target_leg_index = 1
+    leeward_boat.target_leg_index = 1
+    windward_ai.position = Vector2(400.0, 400.0)
+    leeward_boat.position = Vector2(425.0, 405.0)
+    windward_ai.heading_degrees = 100.0
+    leeward_boat.heading_degrees = 105.0
+    windward_ai.speed_knots = 10.0
+    leeward_boat.speed_knots = 10.0
+    scenario.race_state.elapsed_seconds = 20.0
+
+    update_ai_heading(windward_ai, scenario)
+
+    assert windward_ai.heading_degrees == 190.0
+    assert windward_ai.speed_knots == 7.5
+
+
+def test_same_tack_windward_boat_hitting_leeward_boat_takes_two_turn_penalty():
+    scenario = default_scenario()
+    windward_boat, leeward_boat = scenario.boats[0], scenario.boats[1]
+    windward_boat.has_started = True
+    leeward_boat.has_started = True
+    windward_boat.heading_degrees = 315.0
+    leeward_boat.heading_degrees = 315.0
+    windward_boat.position = Vector2(420.0, 420.0)
+    leeward_boat.position = Vector2(430.0, 430.0)
+    windward_boat.speed_knots = 5.0
+    leeward_boat.speed_knots = 5.0
+
+    detect_race_events(scenario, {})
+
+    assert windward_boat.penalty_turn_remaining_degrees == 720.0
+    assert windward_boat.penalties_taken == 1
+    assert windward_boat.speed_knots == 0.0
+    assert leeward_boat.speed_knots == 5.0
+    assert any(event.event_type == RaceEventType.RULE_PENALTY for event in scenario.race_state.events)
+    assert not any(event.event_type == RaceEventType.BOAT_COLLISION for event in scenario.race_state.events)
 
 
 def test_ai_collision_escape_holds_separate_directions_for_random_periods():

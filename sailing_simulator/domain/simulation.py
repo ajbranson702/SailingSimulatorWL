@@ -46,7 +46,6 @@ AI_UPWIND_ANGLE = 45.0
 AI_DOWNWIND_ANGLE = 35.0
 AI_START_STRATEGIES = ("middle", "committee", "pin", "port")
 AI_COLLISION_AVOIDANCE_LOOKAHEAD_SECONDS = 4.0
-AI_COLLISION_AVOIDANCE_COOLDOWN_SECONDS = 6.0
 AI_COLLISION_AVOIDANCE_TRIGGER_DISTANCE = BOAT_COLLISION_RADIUS + BOAT_LENGTH_UNITS * 0.75
 PENALTY_TURN_DEGREES = 720.0
 PENALTY_TURN_RATE_DEGREES_PER_SECOND = 90.0
@@ -93,8 +92,14 @@ def update_ai_heading(boat: Boat, scenario: Scenario) -> None:
             return
         boat.ai_collision_escape_heading = None
 
-    if should_tack_to_avoid_collision(boat, scenario):
+    avoidance_maneuver = collision_avoidance_maneuver(boat, scenario)
+    if avoidance_maneuver == "tack":
         tack(boat, wind_at(scenario, boat.position)[0])
+        boat.ai_board = -boat.ai_board if boat.ai_board is not None else None
+        boat.ai_last_maneuver_seconds = scenario.race_state.elapsed_seconds
+        return
+    if avoidance_maneuver == "gybe":
+        gybe(boat, wind_at(scenario, boat.position)[0])
         boat.ai_board = -boat.ai_board if boat.ai_board is not None else None
         boat.ai_last_maneuver_seconds = scenario.race_state.elapsed_seconds
         return
@@ -454,19 +459,38 @@ def should_change_ai_board(
 
 
 def should_tack_to_avoid_collision(boat: Boat, scenario: Scenario) -> bool:
-    if not boat_is_on_upwind_leg(boat, scenario):
-        return False
-    if scenario.race_state.elapsed_seconds - boat.ai_last_maneuver_seconds < AI_COLLISION_AVOIDANCE_COOLDOWN_SECONDS:
-        return False
+    return collision_avoidance_maneuver(boat, scenario) == "tack"
 
+
+def collision_avoidance_maneuver(boat: Boat, scenario: Scenario) -> str | None:
     for other in scenario.boats:
         if other is boat or other.is_finished or other.penalty_turn_remaining_degrees > 0.0:
             continue
         if distance(boat.position, other.position) > AI_COLLISION_AVOIDANCE_TRIGGER_DISTANCE:
             continue
-        if boats_have_projected_collision(boat, other, AI_COLLISION_AVOIDANCE_LOOKAHEAD_SECONDS):
-            return True
-    return False
+        if not boats_have_projected_collision(boat, other, AI_COLLISION_AVOIDANCE_LOOKAHEAD_SECONDS):
+            continue
+        if boat_should_keep_clear(boat, other, scenario):
+            return avoidance_maneuver_for_leg(boat, scenario)
+    return None
+
+
+def boat_should_keep_clear(boat: Boat, other: Boat, scenario: Scenario) -> bool:
+    boat_tack = tack_side(boat, scenario)
+    other_tack = tack_side(other, scenario)
+    if boat_tack != other_tack:
+        return (
+            boat_is_on_upwind_leg(boat, scenario)
+            and boat_is_on_upwind_leg(other, scenario)
+            and boat_tack == "port"
+            and other_tack == "starboard"
+        )
+
+    return windward_boat(boat, other, scenario) is boat
+
+
+def avoidance_maneuver_for_leg(boat: Boat, scenario: Scenario) -> str:
+    return "tack" if boat_is_on_upwind_leg(boat, scenario) else "gybe"
 
 
 def boats_have_projected_collision(first: Boat, second: Boat, lookahead_seconds: float) -> bool:
@@ -858,6 +882,8 @@ def detect_boat_collisions(scenario: Scenario) -> None:
                 continue
             if apply_port_starboard_collision_rule(first, second, scenario):
                 continue
+            if apply_same_tack_windward_leeward_collision_rule(first, second, scenario):
+                continue
             if boats_are_actively_escaping(first, second, scenario):
                 continue
             colliding_boats.add(first.name)
@@ -912,6 +938,8 @@ def add_event(scenario: Scenario, event_type: RaceEventType, message: str) -> No
 
 
 def apply_port_starboard_collision_rule(first: Boat, second: Boat, scenario: Scenario) -> bool:
+    if not first.has_started or not second.has_started:
+        return False
     if not boats_are_on_upwind_leg(first, second, scenario):
         return False
 
@@ -927,6 +955,23 @@ def apply_port_starboard_collision_rule(first: Boat, second: Boat, scenario: Sce
         scenario,
         RaceEventType.RULE_PENALTY,
         f"{port_boat.name} fouled {starboard_boat.name} on starboard and is taking a two-turn penalty.",
+    )
+    return True
+
+
+def apply_same_tack_windward_leeward_collision_rule(first: Boat, second: Boat, scenario: Scenario) -> bool:
+    if not first.has_started or not second.has_started:
+        return False
+    if tack_side(first, scenario) != tack_side(second, scenario):
+        return False
+
+    windward = windward_boat(first, second, scenario)
+    leeward = second if windward is first else first
+    start_penalty_turn(windward, leeward)
+    add_event(
+        scenario,
+        RaceEventType.RULE_PENALTY,
+        f"{windward.name} fouled {leeward.name} to leeward and is taking a two-turn penalty.",
     )
     return True
 
@@ -951,6 +996,26 @@ def tack_side(boat: Boat, scenario: Scenario) -> str:
 
     wind_direction, _ = wind_at(scenario, boat.position)
     return "starboard" if signed_angle(wind_direction, boat.heading_degrees) > 0.0 else "port"
+
+
+def windward_boat(first: Boat, second: Boat, scenario: Scenario) -> Boat:
+    leeward = leeward_boat(first, second, scenario)
+    return second if leeward is first else first
+
+
+def leeward_boat(first: Boat, second: Boat, scenario: Scenario) -> Boat:
+    from sailing_simulator.domain.wind import wind_at
+
+    wind_direction, _ = wind_at(scenario, midpoint(first.position, second.position))
+    radians = math.radians(wind_direction)
+    downwind_unit = Vector2(-math.sin(radians), math.cos(radians))
+    first_downwind = dot(first.position, downwind_unit)
+    second_downwind = dot(second.position, downwind_unit)
+    return first if first_downwind >= second_downwind else second
+
+
+def midpoint(first: Vector2, second: Vector2) -> Vector2:
+    return Vector2((first.x + second.x) / 2.0, (first.y + second.y) / 2.0)
 
 
 def start_penalty_turn(port_boat: Boat, starboard_boat: Boat) -> None:
