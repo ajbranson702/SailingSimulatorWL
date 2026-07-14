@@ -21,6 +21,7 @@ from sailing_simulator.domain.simulation import (
     ai_tactical_value,
     bearing_to,
     best_vmg_heading,
+    boat_is_on_finish_approach,
     collision_avoidance_maneuver,
     detect_race_events,
     gybe,
@@ -236,6 +237,24 @@ def test_ai_boats_target_different_finish_lanes():
     targets = [ai_target_position(boat, scenario) for boat in ai_boats]
 
     assert targets[0] != targets[1]
+
+
+def test_ai_fetches_finish_without_normal_board_change_near_line():
+    scenario = default_scenario()
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    ai_boat.has_started = True
+    ai_boat.target_leg_index = 2
+    ai_boat.position = Vector2(535.0, 760.0)
+    ai_boat.heading_degrees = 315.0
+    ai_boat.ai_board = 1
+    ai_boat.ai_board_target_leg_index = ai_boat.target_leg_index
+    ai_boat.ai_last_maneuver_seconds = -9999.0
+
+    assert boat_is_on_finish_approach(ai_boat, scenario)
+    update_ai_heading(ai_boat, scenario)
+
+    assert ai_boat.ai_board == 1
+    assert ai_boat.heading_degrees != 45.0
 
 
 def test_ai_targets_leeward_mark_before_w2_finish_line():

@@ -220,6 +220,7 @@ AI rules behavior:
 - Prefer legal maneuvers over pure VMG decisions.
 - Avoid tacking into another boat's path.
 - Vary tactical choices across AI boats so they do not all take the same boards, lanes, and mark approaches.
+- Commit to a clean finish approach instead of repeatedly switching boards near the finish line.
 - Give mark-room when another boat is entitled to it.
 - Use tactical choices such as lee-bow, covering, and holding starboard only when rules allow.
 - Separate safely after incidents before resuming normal tactical routing.

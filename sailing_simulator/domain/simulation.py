@@ -35,6 +35,7 @@ AI_MARK_EXIT_DISTANCE = 65.0
 AI_LEEWARD_ROUNDING_OFFSET = 80.0
 AI_LEEWARD_ROUNDING_ADVANCE = 92.0
 AI_CLOSE_TARGET_RADIUS = 85.0
+AI_FINISH_APPROACH_RADIUS = 260.0
 AI_ROUNDING_WAYPOINT_RADIUS = 70.0
 AI_MARK_TRAFFIC_ZONE_RADIUS = AI_MARK_APPROACH_DISTANCE + AI_MARK_ROUNDING_OFFSET + BOAT_LENGTH_UNITS
 AI_BOUNDARY_MARGIN = 75.0
@@ -96,6 +97,13 @@ def update_ai_heading(boat: Boat, scenario: Scenario) -> None:
             release_collision_stop_if_heading_changed(boat)
             return
         boat.ai_collision_escape_heading = None
+
+    if boat_is_on_finish_approach(boat, scenario):
+        target_position = ai_finish_target_position_for_boat(boat, scenario)
+        desired_heading = best_vmg_heading(boat, scenario, target_position)
+        boat.heading_degrees = turn_toward_heading(boat.heading_degrees, desired_heading, 18.0)
+        release_collision_stop_if_heading_changed(boat)
+        return
 
     avoidance_maneuver = collision_avoidance_maneuver(boat, scenario)
     if avoidance_maneuver == "tack":
@@ -477,6 +485,16 @@ def should_change_ai_board(
     opposite_score = ai_board_vmg_score(boat, scenario, target_position, leg_mode, wind_direction, wind_speed, -boat.ai_board)
     change_ratio = AI_BOARD_CHANGE_RATIO + ai_tactical_value(boat, "maneuver-threshold") * AI_BOARD_CHANGE_RATIO_VARIATION
     return opposite_score > max(0.1, current_score * change_ratio)
+
+
+def boat_is_on_finish_approach(boat: Boat, scenario: Scenario) -> bool:
+    if not boat.has_started or boat.is_finished:
+        return False
+    if target_mark_for(scenario.course, boat.target_leg_index) is not None:
+        return False
+
+    line_start, line_end = extended_start_finish_line(scenario)
+    return distance_from_segment(boat.position, line_start, line_end) <= AI_FINISH_APPROACH_RADIUS
 
 
 def should_tack_to_avoid_collision(boat: Boat, scenario: Scenario) -> bool:
