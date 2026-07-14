@@ -134,7 +134,7 @@ class MainWindow(QMainWindow):
         form.addRow("Base wind", self.wind_strength)
 
         self.wind_direction = QDoubleSpinBox()
-        self.wind_direction.setRange(0.0, 359.0)
+        self.wind_direction.setRange(-359.0, 359.0)
         self.wind_direction.setSuffix(" deg")
         self.wind_direction.setValue(self.scenario.wind_model.base_direction_degrees)
         self.wind_direction.valueChanged.connect(self._update_scenario_from_controls)

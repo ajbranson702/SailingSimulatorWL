@@ -45,6 +45,20 @@ def test_scenario_controls_keep_stable_widths():
     assert all(control.minimumWidth() >= 170 for control in controls)
     assert all(control.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Expanding for control in controls)
     assert window.status.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Ignored
+    assert window.wind_direction.minimum() == -359.0
+    assert window.wind_direction.maximum() == 359.0
+
+    window.close()
+    app.quit()
+
+
+def test_negative_wind_direction_updates_scenario():
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+
+    window.wind_direction.setValue(-12.0)
+
+    assert window.scenario.wind_model.base_direction_degrees == -12.0
 
     window.close()
     app.quit()

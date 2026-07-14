@@ -13,6 +13,15 @@ def test_static_wind_uses_base_direction_and_speed():
     assert speed == 9.0
 
 
+def test_negative_base_wind_direction_normalizes_for_wind_field():
+    scenario = default_scenario()
+    scenario.wind_model.base_direction_degrees = -10.0
+
+    direction, _ = wind_at(scenario, Vector2(450.0, 450.0))
+
+    assert direction == 350.0
+
+
 def test_oscillating_wind_changes_direction_over_time():
     scenario = default_scenario()
     scenario.wind_model.mode = WindMode.OSCILLATING
