@@ -41,6 +41,9 @@ def test_scenario_serialization_round_trip_preserves_course():
     scenario.race_state.time_scale = 25.0
     scenario.race_state.start_sequence_seconds = 180.0
     scenario.boats[0].is_early_start = True
+    scenario.boats[0].penalty_turn_remaining_degrees = 180.0
+    scenario.boats[0].penalty_resume_heading = 45.0
+    scenario.boats[0].penalty_turn_direction = -1
     scenario.boats[1].ai_start_strategy = "committee"
 
     restored = scenario_from_dict(scenario_to_dict(scenario))
@@ -50,6 +53,9 @@ def test_scenario_serialization_round_trip_preserves_course():
     assert restored.race_state.time_scale == 25.0
     assert restored.race_state.start_sequence_seconds == 180.0
     assert restored.boats[0].is_early_start
+    assert restored.boats[0].penalty_turn_remaining_degrees == 180.0
+    assert restored.boats[0].penalty_resume_heading == 45.0
+    assert restored.boats[0].penalty_turn_direction == -1
     assert restored.boats[1].ai_start_strategy == "committee"
     assert [mark.mark_type for mark in restored.course.marks] == [
         MarkType.WINDWARD,

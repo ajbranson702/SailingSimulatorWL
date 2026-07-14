@@ -727,6 +727,63 @@ def test_boat_collision_stops_both_boats_until_heading_changes():
     assert first.collision_stop_heading is None
 
 
+def test_port_boat_hitting_starboard_on_upwind_leg_takes_360_penalty():
+    scenario = default_scenario()
+    port_boat, starboard_boat = scenario.boats[0], scenario.boats[1]
+    port_boat.has_started = True
+    starboard_boat.has_started = True
+    port_boat.heading_degrees = 45.0
+    starboard_boat.heading_degrees = 315.0
+    port_boat.position = Vector2(420.0, 420.0)
+    starboard_boat.position = Vector2(430.0, 420.0)
+    port_boat.speed_knots = 5.0
+    starboard_boat.speed_knots = 5.0
+
+    detect_race_events(scenario, {})
+
+    assert port_boat.penalty_turn_remaining_degrees == 360.0
+    assert port_boat.penalty_resume_heading == 45.0
+    assert port_boat.speed_knots == 0.0
+    assert starboard_boat.speed_knots == 5.0
+    assert starboard_boat.collision_stop_heading is None
+    assert any(event.event_type == RaceEventType.RULE_PENALTY for event in scenario.race_state.events)
+    assert not any(event.event_type == RaceEventType.BOAT_COLLISION for event in scenario.race_state.events)
+
+
+def test_penalty_turn_resumes_original_heading_after_360():
+    scenario = default_scenario()
+    boat = scenario.boats[0]
+    boat.heading_degrees = 45.0
+    boat.penalty_resume_heading = 45.0
+    boat.penalty_turn_remaining_degrees = 360.0
+    boat.penalty_turn_direction = 1
+
+    step_boat(boat, scenario, 2.0)
+
+    assert boat.heading_degrees == 225.0
+    assert boat.penalty_turn_remaining_degrees == 180.0
+
+    step_boat(boat, scenario, 2.0)
+
+    assert boat.heading_degrees == 45.0
+    assert boat.penalty_turn_remaining_degrees == 0.0
+    assert boat.penalty_resume_heading is None
+
+
+def test_ai_boat_taking_penalty_turn_does_not_steer_tactically_first():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    boat.heading_degrees = 45.0
+    boat.penalty_resume_heading = 45.0
+    boat.penalty_turn_remaining_degrees = 360.0
+    boat.penalty_turn_direction = 1
+
+    step_scenario(scenario, 1.0)
+
+    assert boat.heading_degrees == 135.0
+    assert boat.penalty_turn_remaining_degrees == 270.0
+
+
 def test_ai_collision_escape_holds_separate_directions_for_random_periods():
     scenario = default_scenario()
     first, second = [boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI]

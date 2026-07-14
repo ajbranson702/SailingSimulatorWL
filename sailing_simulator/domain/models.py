@@ -54,6 +54,7 @@ class RaceEventType(str, Enum):
     MARK_ROUNDED = "mark_rounded"
     START_CROSSED = "start_crossed"
     EARLY_START = "early_start"
+    RULE_PENALTY = "rule_penalty"
 
 
 @dataclass
@@ -102,6 +103,9 @@ class Boat:
     ai_collision_escape_heading: float | None = None
     is_early_start: bool = False
     ai_start_strategy: str | None = None
+    penalty_turn_remaining_degrees: float = 0.0
+    penalty_resume_heading: float | None = None
+    penalty_turn_direction: int = 1
 
 
 @dataclass

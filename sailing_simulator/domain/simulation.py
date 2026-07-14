@@ -44,6 +44,8 @@ AI_COLLISION_ESCAPE_MAX_SECONDS = 28.0
 AI_UPWIND_ANGLE = 45.0
 AI_DOWNWIND_ANGLE = 35.0
 AI_START_STRATEGIES = ("middle", "committee", "pin", "port")
+PENALTY_TURN_DEGREES = 360.0
+PENALTY_TURN_RATE_DEGREES_PER_SECOND = 90.0
 
 
 def step_scenario(scenario: Scenario, elapsed_seconds: float) -> None:
@@ -68,6 +70,9 @@ def update_ai_heading(boat: Boat, scenario: Scenario) -> None:
 
     if boat.is_finished:
         boat.speed_knots = 0.0
+        return
+
+    if boat.penalty_turn_remaining_degrees > 0.0:
         return
 
     if not boat.has_started and scenario.race_state.elapsed_seconds < 0.0:
@@ -518,6 +523,11 @@ def step_boat(boat: Boat, scenario: Scenario, elapsed_seconds: float) -> None:
         append_track_point(boat)
         return
 
+    if boat.penalty_turn_remaining_degrees > 0.0:
+        step_penalty_turn(boat, elapsed_seconds)
+        append_track_point(boat)
+        return
+
     if boat.collision_stop_heading is not None:
         if headings_match(boat.heading_degrees, boat.collision_stop_heading):
             boat.speed_knots = 0.0
@@ -648,6 +658,9 @@ def reset_boats_to_start(scenario: Scenario) -> None:
         boat.ai_collision_escape_heading = None
         boat.is_early_start = False
         boat.ai_start_strategy = None
+        boat.penalty_turn_remaining_degrees = 0.0
+        boat.penalty_resume_heading = None
+        boat.penalty_turn_direction = 1
     scenario.race_state.elapsed_seconds = 0.0
     scenario.race_state.events = []
     scenario.race_state.finished_boats = set()
@@ -784,6 +797,10 @@ def detect_boat_collisions(scenario: Scenario) -> None:
         if first.is_finished or second.is_finished:
             continue
         if distance(first.position, second.position) <= BOAT_COLLISION_RADIUS:
+            if first.penalty_turn_remaining_degrees > 0.0 or second.penalty_turn_remaining_degrees > 0.0:
+                continue
+            if apply_port_starboard_collision_rule(first, second, scenario):
+                continue
             if boats_are_actively_escaping(first, second, scenario):
                 continue
             colliding_boats.add(first.name)
@@ -835,6 +852,72 @@ def add_event(scenario: Scenario, event_type: RaceEventType, message: str) -> No
             elapsed_seconds=scenario.race_state.elapsed_seconds,
         )
     )
+
+
+def apply_port_starboard_collision_rule(first: Boat, second: Boat, scenario: Scenario) -> bool:
+    if not boats_are_on_upwind_leg(first, second, scenario):
+        return False
+
+    first_tack = tack_side(first, scenario)
+    second_tack = tack_side(second, scenario)
+    if {first_tack, second_tack} != {"port", "starboard"}:
+        return False
+
+    port_boat = first if first_tack == "port" else second
+    starboard_boat = second if port_boat is first else first
+    start_penalty_turn(port_boat, starboard_boat)
+    add_event(
+        scenario,
+        RaceEventType.RULE_PENALTY,
+        f"{port_boat.name} fouled {starboard_boat.name} on starboard and is taking a 360 penalty.",
+    )
+    return True
+
+
+def boats_are_on_upwind_leg(first: Boat, second: Boat, scenario: Scenario) -> bool:
+    return boat_is_on_upwind_leg(first, scenario) and boat_is_on_upwind_leg(second, scenario)
+
+
+def boat_is_on_upwind_leg(boat: Boat, scenario: Scenario) -> bool:
+    target = target_mark_for(scenario.course, boat.target_leg_index)
+    if target is not None:
+        return target.mark_type == MarkType.WINDWARD
+
+    from sailing_simulator.domain.wind import wind_at
+
+    wind_direction, _ = wind_at(scenario, boat.position)
+    return true_wind_angle(boat.heading_degrees, wind_direction) <= 100.0
+
+
+def tack_side(boat: Boat, scenario: Scenario) -> str:
+    from sailing_simulator.domain.wind import wind_at
+
+    wind_direction, _ = wind_at(scenario, boat.position)
+    return "starboard" if signed_angle(wind_direction, boat.heading_degrees) > 0.0 else "port"
+
+
+def start_penalty_turn(port_boat: Boat, starboard_boat: Boat) -> None:
+    if port_boat.penalty_turn_remaining_degrees > 0.0:
+        return
+
+    port_boat.penalty_resume_heading = port_boat.heading_degrees
+    port_boat.penalty_turn_remaining_degrees = PENALTY_TURN_DEGREES
+    port_boat.penalty_turn_direction = -1 if signed_angle(starboard_boat.heading_degrees, port_boat.heading_degrees) < 0.0 else 1
+    port_boat.speed_knots = 0.0
+    port_boat.collision_stop_heading = None
+    port_boat.collision_released_heading = None
+
+
+def step_penalty_turn(boat: Boat, elapsed_seconds: float) -> None:
+    turn = min(boat.penalty_turn_remaining_degrees, PENALTY_TURN_RATE_DEGREES_PER_SECOND * elapsed_seconds)
+    boat.heading_degrees = normalize_degrees(boat.heading_degrees + boat.penalty_turn_direction * turn)
+    boat.penalty_turn_remaining_degrees -= turn
+    boat.speed_knots = 0.0
+    if boat.penalty_turn_remaining_degrees <= 1e-9:
+        boat.penalty_turn_remaining_degrees = 0.0
+        if boat.penalty_resume_heading is not None:
+            boat.heading_degrees = normalize_degrees(boat.penalty_resume_heading)
+        boat.penalty_resume_heading = None
 
 
 def set_collision_escape(boat: Boat, other: Boat, scenario: Scenario) -> None:

@@ -169,6 +169,9 @@ def boat_to_dict(boat: Boat) -> dict[str, Any]:
         "ai_collision_escape_heading": boat.ai_collision_escape_heading,
         "is_early_start": boat.is_early_start,
         "ai_start_strategy": boat.ai_start_strategy,
+        "penalty_turn_remaining_degrees": boat.penalty_turn_remaining_degrees,
+        "penalty_resume_heading": boat.penalty_resume_heading,
+        "penalty_turn_direction": boat.penalty_turn_direction,
     }
 
 
@@ -196,6 +199,9 @@ def boat_from_dict(data: dict[str, Any]) -> Boat:
         ai_collision_escape_heading=data.get("ai_collision_escape_heading"),
         is_early_start=bool(data.get("is_early_start", False)),
         ai_start_strategy=data.get("ai_start_strategy"),
+        penalty_turn_remaining_degrees=float(data.get("penalty_turn_remaining_degrees", 0.0)),
+        penalty_resume_heading=data.get("penalty_resume_heading"),
+        penalty_turn_direction=int(data.get("penalty_turn_direction", 1)),
     )
 
 
