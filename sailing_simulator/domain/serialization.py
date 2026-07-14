@@ -172,6 +172,7 @@ def boat_to_dict(boat: Boat) -> dict[str, Any]:
         "penalty_turn_remaining_degrees": boat.penalty_turn_remaining_degrees,
         "penalty_resume_heading": boat.penalty_resume_heading,
         "penalty_turn_direction": boat.penalty_turn_direction,
+        "penalties_taken": boat.penalties_taken,
     }
 
 
@@ -202,6 +203,7 @@ def boat_from_dict(data: dict[str, Any]) -> Boat:
         penalty_turn_remaining_degrees=float(data.get("penalty_turn_remaining_degrees", 0.0)),
         penalty_resume_heading=data.get("penalty_resume_heading"),
         penalty_turn_direction=int(data.get("penalty_turn_direction", 1)),
+        penalties_taken=int(data.get("penalties_taken", 0)),
     )
 
 

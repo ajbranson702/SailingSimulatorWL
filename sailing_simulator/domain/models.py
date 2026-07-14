@@ -106,6 +106,7 @@ class Boat:
     penalty_turn_remaining_degrees: float = 0.0
     penalty_resume_heading: float | None = None
     penalty_turn_direction: int = 1
+    penalties_taken: int = 0
 
 
 @dataclass

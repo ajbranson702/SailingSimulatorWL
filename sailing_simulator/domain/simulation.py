@@ -44,7 +44,7 @@ AI_COLLISION_ESCAPE_MAX_SECONDS = 28.0
 AI_UPWIND_ANGLE = 45.0
 AI_DOWNWIND_ANGLE = 35.0
 AI_START_STRATEGIES = ("middle", "committee", "pin", "port")
-PENALTY_TURN_DEGREES = 360.0
+PENALTY_TURN_DEGREES = 720.0
 PENALTY_TURN_RATE_DEGREES_PER_SECOND = 90.0
 
 
@@ -661,6 +661,7 @@ def reset_boats_to_start(scenario: Scenario) -> None:
         boat.penalty_turn_remaining_degrees = 0.0
         boat.penalty_resume_heading = None
         boat.penalty_turn_direction = 1
+        boat.penalties_taken = 0
     scenario.race_state.elapsed_seconds = 0.0
     scenario.race_state.events = []
     scenario.race_state.finished_boats = set()
@@ -869,7 +870,7 @@ def apply_port_starboard_collision_rule(first: Boat, second: Boat, scenario: Sce
     add_event(
         scenario,
         RaceEventType.RULE_PENALTY,
-        f"{port_boat.name} fouled {starboard_boat.name} on starboard and is taking a 360 penalty.",
+        f"{port_boat.name} fouled {starboard_boat.name} on starboard and is taking a two-turn penalty.",
     )
     return True
 
@@ -903,6 +904,7 @@ def start_penalty_turn(port_boat: Boat, starboard_boat: Boat) -> None:
     port_boat.penalty_resume_heading = port_boat.heading_degrees
     port_boat.penalty_turn_remaining_degrees = PENALTY_TURN_DEGREES
     port_boat.penalty_turn_direction = -1 if signed_angle(starboard_boat.heading_degrees, port_boat.heading_degrees) < 0.0 else 1
+    port_boat.penalties_taken += 1
     port_boat.speed_knots = 0.0
     port_boat.collision_stop_heading = None
     port_boat.collision_released_heading = None

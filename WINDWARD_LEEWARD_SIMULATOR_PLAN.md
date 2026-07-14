@@ -410,7 +410,7 @@ Status: deferred until the app is ready for releasable packaging.
 
 Deliverable: starts, AI decisions, and user boat interactions follow the core Racing Rules of Sailing well enough for tactical experimentation.
 
-Status: started. Initial start-sequence, early-start detection, AI pre-start strategy behavior, and upwind port/starboard collision penalties are implemented.
+Status: started. Initial start-sequence, early-start detection, AI pre-start strategy behavior, upwind port/starboard two-turn penalties, and penalty tracking are implemented.
 
 Implementation approach:
 

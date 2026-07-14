@@ -18,7 +18,7 @@ def test_t3_progress_table_shows_start_marks_and_finish():
         for column in range(window.progress_table.columnCount())
     ]
 
-    assert headers == ["Start", "W", "G", "L", "Finish"]
+    assert headers == ["Start", "W", "G", "L", "Finish", "Penalties"]
 
     window.close()
     app.quit()
@@ -194,6 +194,21 @@ def test_g_key_gybes_user_boat():
     assert handled
     assert user_boat.heading_degrees == 235.0
     assert user_boat.speed_knots == 4.5
+
+    window.close()
+    app.quit()
+
+
+def test_progress_table_shows_penalties_taken():
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    window.scenario.boats[0].penalties_taken = 2
+
+    window._refresh_boat_status()
+
+    penalties_column = window.progress_table.columnCount() - 1
+    assert window.progress_table.horizontalHeaderItem(penalties_column).text() == "Penalties"
+    assert window.progress_table.item(0, penalties_column).text() == "2"
 
     window.close()
     app.quit()

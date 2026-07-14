@@ -613,12 +613,14 @@ class MainWindow(QMainWindow):
         headers = ["Start"]
         headers.extend(target_label_for(self.scenario.course, index) for index in range(total_targets_for(self.scenario.course)))
         headers.append("Finish")
+        headers.append("Penalties")
         self.progress_table.setColumnCount(len(headers))
         self.progress_table.setRowCount(len(self.scenario.boats))
         self.progress_table.setHorizontalHeaderLabels(headers)
         self.progress_table.setVerticalHeaderLabels([boat.name for boat in self.scenario.boats])
 
-        finish_column = len(headers) - 1
+        finish_column = len(headers) - 2
+        penalties_column = len(headers) - 1
         for row, boat in enumerate(self.scenario.boats):
             start_item = QTableWidgetItem("✓" if boat.has_started or boat.is_finished else "")
             start_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -633,6 +635,10 @@ class MainWindow(QMainWindow):
             finish_item = QTableWidgetItem("✓" if boat.is_finished else "")
             finish_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.progress_table.setItem(row, finish_column, finish_item)
+
+            penalties_item = QTableWidgetItem(str(boat.penalties_taken) if boat.penalties_taken else "")
+            penalties_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.progress_table.setItem(row, penalties_column, penalties_item)
 
         self.progress_table.resizeColumnsToContents()
 
