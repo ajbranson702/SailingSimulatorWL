@@ -219,6 +219,7 @@ AI rules behavior:
 
 - Prefer legal maneuvers over pure VMG decisions.
 - Avoid tacking into another boat's path.
+- Vary tactical choices across AI boats so they do not all take the same boards, lanes, and mark approaches.
 - Give mark-room when another boat is entitled to it.
 - Use tactical choices such as lee-bow, covering, and holding starboard only when rules allow.
 - Separate safely after incidents before resuming normal tactical routing.
@@ -411,7 +412,7 @@ Status: deferred until the app is ready for releasable packaging.
 
 Deliverable: starts, AI decisions, and user boat interactions follow the core Racing Rules of Sailing well enough for tactical experimentation.
 
-Status: started. Initial start-sequence, early-start detection, AI pre-start strategy behavior, upwind port/starboard two-turn penalties, same-tack windward/leeward penalties, penalty tracking, and predictive AI collision avoidance are implemented.
+Status: started. Initial start-sequence, early-start detection, AI pre-start strategy behavior, AI tactical variation, upwind port/starboard two-turn penalties, same-tack windward/leeward penalties, penalty tracking, and predictive AI collision avoidance are implemented.
 
 Implementation approach:
 

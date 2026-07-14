@@ -48,6 +48,10 @@ AI_DOWNWIND_ANGLE = 35.0
 AI_START_STRATEGIES = ("middle", "committee", "pin", "port")
 AI_COLLISION_AVOIDANCE_LOOKAHEAD_SECONDS = 4.0
 AI_COLLISION_AVOIDANCE_TRIGGER_DISTANCE = BOAT_COLLISION_RADIUS + BOAT_LENGTH_UNITS * 0.75
+AI_TACTICAL_WAYPOINT_VARIATION = 34.0
+AI_TACTICAL_SCORE_BIAS = 0.32
+AI_BOARD_CHANGE_RATIO = 1.35
+AI_BOARD_CHANGE_RATIO_VARIATION = 0.22
 PENALTY_TURN_DEGREES = 720.0
 PENALTY_TURN_RATE_DEGREES_PER_SECOND = 90.0
 
@@ -218,6 +222,8 @@ def ai_standard_mark_rounding_target(
     exit_side: Vector2,
     approach_confirmed: bool,
 ) -> Vector2:
+    approach_distance = approach_distance_for_boat(boat, AI_MARK_APPROACH_DISTANCE)
+    rounding_offset = rounding_offset_for_boat(boat, AI_MARK_ROUNDING_OFFSET)
     return ai_staged_mark_rounding_target(
         boat,
         target,
@@ -225,8 +231,8 @@ def ai_standard_mark_rounding_target(
         outgoing_unit,
         exit_side,
         approach_confirmed,
-        AI_MARK_APPROACH_DISTANCE,
-        AI_MARK_ROUNDING_OFFSET,
+        approach_distance,
+        rounding_offset,
     )
 
 
@@ -238,6 +244,8 @@ def ai_leeward_rounding_target(
     exit_side: Vector2,
     approach_confirmed: bool,
 ) -> Vector2:
+    approach_distance = approach_distance_for_boat(boat, AI_LEEWARD_ROUNDING_ADVANCE)
+    rounding_offset = rounding_offset_for_boat(boat, AI_LEEWARD_ROUNDING_OFFSET)
     return ai_staged_mark_rounding_target(
         boat,
         target,
@@ -245,8 +253,8 @@ def ai_leeward_rounding_target(
         outgoing_unit,
         exit_side,
         approach_confirmed,
-        AI_LEEWARD_ROUNDING_ADVANCE,
-        AI_LEEWARD_ROUNDING_OFFSET,
+        approach_distance,
+        rounding_offset,
     )
 
 
@@ -294,6 +302,16 @@ def reset_ai_rounding_stage_if_needed(boat: Boat) -> None:
     boat.ai_rounding_stage = 0
 
 
+def approach_distance_for_boat(boat: Boat, base_distance: float) -> float:
+    variation = ai_tactical_value(boat, "approach") * AI_TACTICAL_WAYPOINT_VARIATION
+    return max(base_distance * 0.65, base_distance + variation)
+
+
+def rounding_offset_for_boat(boat: Boat, base_offset: float) -> float:
+    variation = ai_tactical_value(boat, "rounding") * AI_TACTICAL_WAYPOINT_VARIATION
+    return max(base_offset * 0.65, base_offset + variation)
+
+
 def ai_finish_target_position(scenario: Scenario) -> Vector2:
     return start_line_center(scenario)
 
@@ -308,8 +326,9 @@ def ai_finish_target_position_for_boat(boat: Boat, scenario: Scenario) -> Vector
 
     center = start_line_center(scenario)
     side = boat.ai_board or 1
-    offset = min(95.0, length * 0.48)
-    return Vector2(center.x + (dx / length) * offset * side, center.y + (dy / length) * offset * side)
+    lane_variation = ai_tactical_value(boat, "finish-lane") * 0.2
+    offset = min(105.0, length * max(0.18, min(0.48, 0.34 + lane_variation))) * side
+    return Vector2(center.x + (dx / length) * offset, center.y + (dy / length) * offset)
 
 
 def ai_prestart_target_position_for_boat(boat: Boat, scenario: Scenario) -> Vector2:
@@ -456,7 +475,8 @@ def should_change_ai_board(
 
     current_score = ai_board_vmg_score(boat, scenario, target_position, leg_mode, wind_direction, wind_speed, boat.ai_board)
     opposite_score = ai_board_vmg_score(boat, scenario, target_position, leg_mode, wind_direction, wind_speed, -boat.ai_board)
-    return opposite_score > max(0.1, current_score * 1.35)
+    change_ratio = AI_BOARD_CHANGE_RATIO + ai_tactical_value(boat, "maneuver-threshold") * AI_BOARD_CHANGE_RATIO_VARIATION
+    return opposite_score > max(0.1, current_score * change_ratio)
 
 
 def should_tack_to_avoid_collision(boat: Boat, scenario: Scenario) -> bool:
@@ -540,6 +560,15 @@ def velocity_units_per_second(boat: Boat) -> Vector2:
     )
 
 
+def ai_tactical_value(boat: Boat, salt: str) -> float:
+    key = f"{boat.name}:{boat.target_leg_index}:{salt}"
+    seed = 2166136261
+    for character in key:
+        seed ^= ord(character)
+        seed = (seed * 16777619) & 0xFFFFFFFF
+    return (seed / 0xFFFFFFFF) * 2.0 - 1.0
+
+
 def ai_leg_mode(wind_direction: float, target_bearing: float) -> str:
     relative_to_wind = abs(signed_angle(wind_direction, target_bearing))
     if 50.0 <= relative_to_wind <= 130.0:
@@ -573,7 +602,8 @@ def ai_board_vmg_score(
     twa = true_wind_angle(heading, wind_direction)
     speed = target_boat_speed(scenario.polar, wind_speed, twa)
     alignment = math.cos(math.radians(signed_angle(heading, bearing_to(boat.position, target_position))))
-    return speed * alignment - ai_mark_obstacle_penalty(boat, scenario, target_position, heading)
+    preference = board * ai_tactical_value(boat, f"{leg_mode}-board") * AI_TACTICAL_SCORE_BIAS
+    return speed * alignment + preference - ai_mark_obstacle_penalty(boat, scenario, target_position, heading)
 
 
 def ai_mark_obstacle_penalty(boat: Boat, scenario: Scenario, target_position: Vector2, heading: float) -> float:

@@ -18,6 +18,7 @@ from sailing_simulator.domain.simulation import (
     ai_start_strategy_for_boat,
     ai_steering_target_position,
     ai_target_position,
+    ai_tactical_value,
     bearing_to,
     best_vmg_heading,
     collision_avoidance_maneuver,
@@ -175,7 +176,10 @@ def test_ai_targets_start_finish_line_after_w_course_marks_are_complete():
     ai_boat.target_leg_index = 2
     ai_boat.ai_board = 1
 
-    assert ai_target_position(ai_boat, scenario) == Vector2(555.0, 700.0)
+    target = ai_target_position(ai_boat, scenario)
+
+    assert target.y == 700.0
+    assert target.x > 460.0
 
 
 def test_ai_targets_prestart_side_during_countdown():
@@ -210,6 +214,28 @@ def test_ai_boats_use_different_start_strategies():
     strategies = [ai_start_strategy_for_boat(boat, scenario) for boat in ai_boats]
 
     assert strategies == ["middle", "committee"]
+
+
+def test_ai_boats_have_different_leg_tactical_preferences():
+    scenario = default_scenario()
+    ai_boats = [boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI]
+
+    preferences = [ai_tactical_value(boat, "upwind-board") for boat in ai_boats]
+
+    assert preferences[0] != preferences[1]
+
+
+def test_ai_boats_target_different_finish_lanes():
+    scenario = default_scenario()
+    ai_boats = [boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI]
+    for boat in ai_boats:
+        boat.has_started = True
+        boat.target_leg_index = 2
+        boat.ai_board = 1
+
+    targets = [ai_target_position(boat, scenario) for boat in ai_boats]
+
+    assert targets[0] != targets[1]
 
 
 def test_ai_targets_leeward_mark_before_w2_finish_line():
@@ -249,6 +275,19 @@ def test_ai_uses_staged_leeward_rounding_waypoints():
     assert ai_boat.ai_rounding_stage == 2
 
 
+def test_ai_boats_use_different_mark_rounding_lanes():
+    scenario = default_scenario()
+    ai_boats = [boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI]
+    for boat in ai_boats:
+        boat.has_started = True
+        boat.target_leg_index = 0
+        boat.position = Vector2(460.0, 650.0)
+
+    targets = [ai_steering_target_position(boat, scenario) for boat in ai_boats]
+
+    assert targets[0] != targets[1]
+
+
 def test_ai_targets_t3_leeward_mark_before_finish_line():
     scenario = default_scenario()
     scenario.course = course_for_format(RaceFormat.T3)
@@ -267,7 +306,10 @@ def test_ai_targets_t3_start_finish_line_after_required_marks_are_complete():
     ai_boat.has_started = True
     ai_boat.target_leg_index = 3
 
-    assert ai_target_position(ai_boat, scenario) == Vector2(555.0, 700.0)
+    target = ai_target_position(ai_boat, scenario)
+
+    assert target.y == 700.0
+    assert target.x > 460.0
 
 
 def test_ai_steers_directly_on_reaching_leg():
