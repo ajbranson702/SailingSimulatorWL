@@ -4,7 +4,7 @@ Windows desktop simulator for experimenting with windward-leeward sailing race s
 
 ## Current Status
 
-Phase 6 is complete:
+Phase 8 is complete, with Phase 9 rules work in progress:
 
 - PySide6 app shell
 - Single simulator screen
@@ -27,14 +27,32 @@ Phase 6 is complete:
 - AI boats make basic tack/gybe-style direction changes through VMG heading selection
 - Rankings are shown in the status panel
 - Basic domain tests
+- Built-in scenario templates
+- Scenario save/load with terrain
+- Polar import/export in JSON or CSV format
+- PyInstaller packaging recipe for Windows
 
 ## Controls
 
 - Up arrow: head up toward the wind
 - Down arrow: bear away from the wind
 - `T`: tack
+- `G`: gybe
 - Start/Pause/Reset: control simulation playback
 - Sim speed: run the simulation from 1x to 50x real time
+
+## Scenario Templates And Polars
+
+Use **Load Template** in the Scenario panel to load built-in examples:
+
+- `W2 Training`
+- `T3 Gybe Mark`
+- `Gusty Terrain W4`
+
+Use **Import Polar** or **Export Polar** to load/save boat performance data. Supported formats:
+
+- JSON: preserves the polar name and full speed table.
+- CSV: first row is true wind angles, first column is true wind speed.
 
 ## Environment
 
@@ -54,6 +72,26 @@ From PowerShell:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests
+```
+
+## Windows Packaging
+
+PyInstaller is used for the Windows prototype build. If PyInstaller is not already installed in the project venv:
+
+```powershell
+.\scripts\build_windows.ps1 -InstallPyInstaller
+```
+
+After PyInstaller is installed, rebuild with:
+
+```powershell
+.\scripts\build_windows.ps1
+```
+
+The executable is written to:
+
+```text
+dist\SailingRaceSimulator.exe
 ```
 
 ## Qt Smoke Test

@@ -38,7 +38,9 @@ from sailing_simulator.domain.presets import (
     invalid_marks_for,
     remove_invalid_marks,
 )
+from sailing_simulator.domain.polar_io import load_polar, save_polar
 from sailing_simulator.domain.race_progress import ranked_boats, target_label_for, total_targets_for
+from sailing_simulator.domain.scenario_library import built_in_scenarios
 from sailing_simulator.domain.serialization import load_scenario, save_scenario
 from sailing_simulator.domain.simulation import (
     gybe,
@@ -99,6 +101,17 @@ class MainWindow(QMainWindow):
         title = QLabel("Scenario")
         title.setStyleSheet("font-size: 20px; font-weight: 600;")
         layout.addWidget(title)
+
+        library_actions = QHBoxLayout()
+        self.scenario_library_combo = QComboBox()
+        for template in built_in_scenarios():
+            self.scenario_library_combo.addItem(template.name, template.name)
+        self._stabilize_control(self.scenario_library_combo)
+        load_template = QPushButton("Load Template")
+        load_template.clicked.connect(self._load_selected_scenario_template)
+        library_actions.addWidget(self.scenario_library_combo)
+        library_actions.addWidget(load_template)
+        layout.addLayout(library_actions)
 
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -227,6 +240,15 @@ class MainWindow(QMainWindow):
         file_actions.addWidget(save)
         file_actions.addWidget(load)
         layout.addLayout(file_actions)
+
+        polar_actions = QHBoxLayout()
+        import_polar = QPushButton("Import Polar")
+        import_polar.clicked.connect(self._import_polar)
+        export_polar = QPushButton("Export Polar")
+        export_polar.clicked.connect(self._export_polar)
+        polar_actions.addWidget(import_polar)
+        polar_actions.addWidget(export_polar)
+        layout.addLayout(polar_actions)
 
         layout.addWidget(self._section_label("Terrain"))
 
@@ -430,6 +452,51 @@ class MainWindow(QMainWindow):
         self._set_selected_terrain_index(0 if self.scenario.terrain else None)
         self._refresh_controls_from_scenario()
         self.statusBar().showMessage(f"Loaded configuration from {path}")
+
+    def _load_selected_scenario_template(self) -> None:
+        template_name = self.scenario_library_combo.currentData()
+        for template in built_in_scenarios():
+            if template.name == template_name:
+                self.scenario = template.builder()
+                self.scenario.race_state.is_running = False
+                self._timer.stop()
+                self.canvas.set_scenario(self.scenario)
+                self._set_selected_terrain_index(0 if self.scenario.terrain else None)
+                self._refresh_controls_from_scenario()
+                self.statusBar().showMessage(f"Loaded template: {template.name}")
+                return
+
+    def _import_polar(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Import Polar", "", "Polar Files (*.json *.csv)")
+        if not path:
+            return
+
+        self._import_polar_from_path(path)
+
+    def _export_polar(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(self, "Export Polar", "boat_polar.csv", "Polar Files (*.csv *.json)")
+        if not path:
+            return
+
+        self._export_polar_to_path(path)
+
+    def _import_polar_from_path(self, path: str) -> None:
+        try:
+            self.scenario.polar = load_polar(path)
+        except (OSError, ValueError, TypeError, KeyError) as error:
+            QMessageBox.warning(self, "Import Polar", f"Could not import polar:\n{error}")
+            self.statusBar().showMessage("Polar import failed")
+            return
+        self.statusBar().showMessage(f"Imported polar from {path}")
+
+    def _export_polar_to_path(self, path: str) -> None:
+        try:
+            save_polar(self.scenario.polar, path)
+        except OSError as error:
+            QMessageBox.warning(self, "Export Polar", f"Could not export polar:\n{error}")
+            self.statusBar().showMessage("Polar export failed")
+            return
+        self.statusBar().showMessage(f"Exported polar to {path}")
 
     def _on_canvas_changed(self) -> None:
         update_wind_field(self.scenario)

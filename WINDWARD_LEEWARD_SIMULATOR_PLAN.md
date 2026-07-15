@@ -395,7 +395,7 @@ Status: initial terrain placement and wind-effect implementation complete.
 
 Deliverable: packaged Windows prototype ready for repeated experimentation.
 
-Status: deferred until the app is ready for releasable packaging.
+Status: complete. Built-in scenario templates, JSON/CSV polar import/export, save/load polish, Windows PyInstaller packaging, and smoke-test coverage are implemented.
 
 ### Phase 9: Start Sequence, Racing Rules, and Legal Maneuvers
 

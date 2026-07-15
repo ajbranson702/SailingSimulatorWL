@@ -2,6 +2,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QSizePolicy
 
 from sailing_simulator.domain.models import BoatControlMode, RaceFormat, TerrainObject, TerrainType, Vector2, default_scenario
+from sailing_simulator.domain.polar_io import load_polar, save_polar
 from sailing_simulator.domain.presets import course_for_format
 from sailing_simulator.domain.serialization import save_scenario
 from sailing_simulator.ui.main_window import MainWindow
@@ -40,6 +41,7 @@ def test_scenario_controls_keep_stable_widths():
         window.gust_percent,
         window.time_scale,
         window.start_sequence,
+        window.scenario_library_combo,
     ]
 
     assert all(control.minimumWidth() >= 170 for control in controls)
@@ -52,6 +54,23 @@ def test_scenario_controls_keep_stable_widths():
     app.quit()
 
 
+def test_load_built_in_scenario_template_updates_controls():
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    window.scenario_library_combo.setCurrentText("Gusty Terrain W4")
+
+    window._load_selected_scenario_template()
+
+    assert window.scenario.course.race_format == RaceFormat.W4
+    assert window.format_combo.currentText() == RaceFormat.W4.value
+    assert len(window.scenario.terrain) == 2
+    assert window.selected_terrain_index == 0
+    assert window.delete_terrain_button.isEnabled()
+
+    window.close()
+    app.quit()
+
+
 def test_negative_wind_direction_updates_scenario():
     app = QApplication.instance() or QApplication([])
     window = MainWindow()
@@ -59,6 +78,27 @@ def test_negative_wind_direction_updates_scenario():
     window.wind_direction.setValue(-12.0)
 
     assert window.scenario.wind_model.base_direction_degrees == -12.0
+
+    window.close()
+    app.quit()
+
+
+def test_window_imports_and_exports_polar(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    exported = tmp_path / "exported_polar.csv"
+    imported = tmp_path / "custom_polar.json"
+
+    window._export_polar_to_path(str(exported))
+    exported_polar = load_polar(exported)
+    exported_polar.name = "Custom Import"
+    exported_polar.speeds_by_tws_and_twa[10.0][90.0] = 7.2
+    save_polar(exported_polar, imported)
+
+    window._import_polar_from_path(str(imported))
+
+    assert window.scenario.polar.name == "Custom Import"
+    assert window.scenario.polar.speeds_by_tws_and_twa[10.0][90.0] == 7.2
 
     window.close()
     app.quit()

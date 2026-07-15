@@ -1,5 +1,7 @@
-from sailing_simulator.domain.models import MarkType, RaceFormat, TerrainObject, TerrainType, Vector2, default_scenario
+from sailing_simulator.domain.models import MarkType, RaceFormat, TerrainObject, TerrainType, Vector2, WindMode, default_scenario
+from sailing_simulator.domain.polar_io import load_polar, save_polar
 from sailing_simulator.domain.presets import adapt_course_to_format, course_for_format, remove_invalid_marks
+from sailing_simulator.domain.scenario_library import built_in_scenarios, scenario_template_by_name
 from sailing_simulator.domain.serialization import load_scenario, save_scenario, scenario_from_dict, scenario_to_dict
 from sailing_simulator.domain.validation import validate_course
 
@@ -32,6 +34,17 @@ def test_course_presets_include_required_marks():
 def test_course_validation_accepts_presets():
     for race_format in RaceFormat:
         assert validate_course(course_for_format(race_format)) == []
+
+
+def test_built_in_scenario_library_contains_phase_eight_templates():
+    templates = built_in_scenarios()
+
+    assert [template.name for template in templates] == ["W2 Training", "T3 Gybe Mark", "Gusty Terrain W4"]
+    assert scenario_template_by_name("T3 Gybe Mark").builder().course.race_format == RaceFormat.T3
+    terrain_scenario = scenario_template_by_name("Gusty Terrain W4").builder()
+    assert terrain_scenario.course.race_format == RaceFormat.W4
+    assert terrain_scenario.wind_model.mode == WindMode.PERSISTENT_WITH_OSCILLATION
+    assert terrain_scenario.terrain
 
 
 def test_scenario_serialization_round_trip_preserves_course():
@@ -92,6 +105,29 @@ def test_saved_configuration_file_preserves_multiple_terrain_objects(tmp_path):
         (TerrainType.TREES, Vector2(250.0, 300.0), 35.0, 140.0),
         (TerrainType.CLIFF, Vector2(700.0, 160.0), 80.0, 260.0),
     ]
+
+
+def test_polar_json_round_trip(tmp_path):
+    scenario = default_scenario()
+    scenario.polar.name = "Test Polar"
+    path = tmp_path / "polar.json"
+
+    save_polar(scenario.polar, path)
+    restored = load_polar(path)
+
+    assert restored.name == "Test Polar"
+    assert restored.speeds_by_tws_and_twa == scenario.polar.speeds_by_tws_and_twa
+
+
+def test_polar_csv_round_trip(tmp_path):
+    scenario = default_scenario()
+    path = tmp_path / "polar.csv"
+
+    save_polar(scenario.polar, path)
+    restored = load_polar(path)
+
+    assert restored.name == "polar"
+    assert restored.speeds_by_tws_and_twa == scenario.polar.speeds_by_tws_and_twa
 
 
 def test_adapting_w_course_to_t3_adds_gybe_and_keeps_leeward_mark():
