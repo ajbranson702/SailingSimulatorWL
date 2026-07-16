@@ -173,6 +173,10 @@ def boat_to_dict(boat: Boat) -> dict[str, Any]:
         "penalty_resume_heading": boat.penalty_resume_heading,
         "penalty_turn_direction": boat.penalty_turn_direction,
         "penalties_taken": boat.penalties_taken,
+        "maneuver_remaining_degrees": boat.maneuver_remaining_degrees,
+        "maneuver_turn_direction": boat.maneuver_turn_direction,
+        "maneuver_turn_rate_degrees_per_second": boat.maneuver_turn_rate_degrees_per_second,
+        "maneuver_speed_factor": boat.maneuver_speed_factor,
     }
 
 
@@ -204,6 +208,10 @@ def boat_from_dict(data: dict[str, Any]) -> Boat:
         penalty_resume_heading=data.get("penalty_resume_heading"),
         penalty_turn_direction=int(data.get("penalty_turn_direction", 1)),
         penalties_taken=int(data.get("penalties_taken", 0)),
+        maneuver_remaining_degrees=float(data.get("maneuver_remaining_degrees", 0.0)),
+        maneuver_turn_direction=int(data.get("maneuver_turn_direction", 1)),
+        maneuver_turn_rate_degrees_per_second=float(data.get("maneuver_turn_rate_degrees_per_second", 0.0)),
+        maneuver_speed_factor=float(data.get("maneuver_speed_factor", 1.0)),
     )
 
 

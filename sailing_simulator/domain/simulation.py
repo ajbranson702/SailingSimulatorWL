@@ -57,6 +57,12 @@ AI_BOARD_CHANGE_RATIO = 1.35
 AI_BOARD_CHANGE_RATIO_VARIATION = 0.22
 PENALTY_TURN_DEGREES = 720.0
 PENALTY_TURN_RATE_DEGREES_PER_SECOND = 90.0
+USER_TACK_TURN_RATE_DEGREES_PER_SECOND = 38.0
+USER_GYBE_TURN_RATE_DEGREES_PER_SECOND = 58.0
+USER_TACK_INITIAL_SPEED_FACTOR = 0.55
+USER_GYBE_INITIAL_SPEED_FACTOR = 0.72
+USER_TACK_TARGET_SPEED_FACTOR = 0.62
+USER_GYBE_TARGET_SPEED_FACTOR = 0.78
 
 
 def step_scenario(scenario: Scenario, elapsed_seconds: float) -> None:
@@ -769,12 +775,17 @@ def step_boat(boat: Boat, scenario: Scenario, elapsed_seconds: float) -> None:
             return
         boat.collision_stop_heading = None
 
+    step_manual_maneuver(boat, elapsed_seconds)
+
     wind_direction, wind_speed = wind_at(scenario, boat.position)
     target_speed = target_boat_speed(
         scenario.polar,
         wind_speed,
         true_wind_angle(boat.heading_degrees, wind_direction),
     )
+    if boat.maneuver_remaining_degrees > 0.0:
+        target_speed *= boat.maneuver_speed_factor
+
     acceleration = 1.3
     speed_delta = target_speed - boat.speed_knots
     max_delta = acceleration * elapsed_seconds
@@ -840,20 +851,73 @@ def steer_away_from_wind(boat: Boat, wind_from_degrees: float, degrees: float) -
     release_collision_stop_if_heading_changed(boat)
 
 
-def tack(boat: Boat, wind_from_degrees: float) -> None:
+def tack(boat: Boat, wind_from_degrees: float, gradual: bool = False) -> None:
     difference = signed_angle(wind_from_degrees, boat.heading_degrees)
     turn = 90.0 if difference > 0 else -90.0
+    if gradual:
+        start_manual_maneuver(
+            boat,
+            turn,
+            USER_TACK_TURN_RATE_DEGREES_PER_SECOND,
+            USER_TACK_INITIAL_SPEED_FACTOR,
+            USER_TACK_TARGET_SPEED_FACTOR,
+        )
+        return
+
     boat.heading_degrees = normalize_degrees(boat.heading_degrees + turn)
     boat.speed_knots *= 0.65
     release_collision_stop_if_heading_changed(boat)
 
 
-def gybe(boat: Boat, wind_from_degrees: float) -> None:
+def gybe(boat: Boat, wind_from_degrees: float, gradual: bool = False) -> None:
     difference = signed_angle(wind_from_degrees, boat.heading_degrees)
     turn = -90.0 if difference > 0 else 90.0
+    if gradual:
+        start_manual_maneuver(
+            boat,
+            turn,
+            USER_GYBE_TURN_RATE_DEGREES_PER_SECOND,
+            USER_GYBE_INITIAL_SPEED_FACTOR,
+            USER_GYBE_TARGET_SPEED_FACTOR,
+        )
+        return
+
     boat.heading_degrees = normalize_degrees(boat.heading_degrees + turn)
     boat.speed_knots *= 0.75
     release_collision_stop_if_heading_changed(boat)
+
+
+def start_manual_maneuver(
+    boat: Boat,
+    turn_degrees: float,
+    turn_rate_degrees_per_second: float,
+    initial_speed_factor: float,
+    target_speed_factor: float,
+) -> None:
+    if boat.maneuver_remaining_degrees > 0.0:
+        return
+
+    boat.maneuver_remaining_degrees = abs(turn_degrees)
+    boat.maneuver_turn_direction = 1 if turn_degrees >= 0.0 else -1
+    boat.maneuver_turn_rate_degrees_per_second = turn_rate_degrees_per_second
+    boat.maneuver_speed_factor = target_speed_factor
+    boat.speed_knots *= initial_speed_factor
+    release_collision_stop_if_heading_changed(boat)
+
+
+def step_manual_maneuver(boat: Boat, elapsed_seconds: float) -> None:
+    if boat.maneuver_remaining_degrees <= 0.0:
+        boat.maneuver_remaining_degrees = 0.0
+        boat.maneuver_speed_factor = 1.0
+        return
+
+    turn = min(boat.maneuver_remaining_degrees, boat.maneuver_turn_rate_degrees_per_second * elapsed_seconds)
+    boat.heading_degrees = normalize_degrees(boat.heading_degrees + boat.maneuver_turn_direction * turn)
+    boat.maneuver_remaining_degrees -= turn
+    if boat.maneuver_remaining_degrees <= 1e-9:
+        boat.maneuver_remaining_degrees = 0.0
+        boat.maneuver_speed_factor = 1.0
+        boat.maneuver_turn_rate_degrees_per_second = 0.0
 
 
 def bearing_to(origin: Vector2, target: Vector2) -> float:
@@ -896,6 +960,10 @@ def reset_boats_to_start(scenario: Scenario) -> None:
         boat.penalty_resume_heading = None
         boat.penalty_turn_direction = 1
         boat.penalties_taken = 0
+        boat.maneuver_remaining_degrees = 0.0
+        boat.maneuver_turn_direction = 1
+        boat.maneuver_turn_rate_degrees_per_second = 0.0
+        boat.maneuver_speed_factor = 1.0
     scenario.race_state.elapsed_seconds = 0.0
     scenario.race_state.events = []
     scenario.race_state.finished_boats = set()

@@ -232,8 +232,10 @@ def test_g_key_gybes_user_boat():
     handled = window._handle_key(Qt.Key.Key_G)
 
     assert handled
-    assert user_boat.heading_degrees == 235.0
-    assert user_boat.speed_knots == 4.5
+    assert user_boat.heading_degrees == 145.0
+    assert round(user_boat.speed_knots, 2) == 4.32
+    assert user_boat.maneuver_remaining_degrees == 90.0
+    assert user_boat.maneuver_turn_direction == 1
 
     window.close()
     app.quit()

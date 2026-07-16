@@ -85,6 +85,29 @@ def test_tack_turns_boat_roughly_onto_opposite_tack_and_slows():
     assert boat.speed_knots == 3.25
 
 
+def test_gradual_tack_arcs_over_time_and_adds_speed_penalty():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.speed_knots = 6.0
+
+    tack(boat, scenario.wind_model.base_direction_degrees, gradual=True)
+
+    assert boat.heading_degrees == 315.0
+    assert round(boat.speed_knots, 2) == 3.3
+    assert boat.maneuver_remaining_degrees == 90.0
+
+    step_boat(boat, scenario, 1.0)
+
+    assert boat.heading_degrees == 353.0
+    assert boat.maneuver_remaining_degrees == 52.0
+
+    step_boat(boat, scenario, 2.0)
+
+    assert boat.heading_degrees == 45.0
+    assert boat.maneuver_remaining_degrees == 0.0
+    assert boat.maneuver_speed_factor == 1.0
+
+
 def test_gybe_turns_boat_roughly_onto_opposite_downwind_board_and_slows():
     scenario = default_scenario()
     boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
@@ -95,6 +118,30 @@ def test_gybe_turns_boat_roughly_onto_opposite_downwind_board_and_slows():
 
     assert boat.heading_degrees == 235.0
     assert boat.speed_knots == 4.5
+
+
+def test_gradual_gybe_arcs_over_time_and_adds_speed_penalty():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.heading_degrees = 145.0
+    boat.speed_knots = 6.0
+
+    gybe(boat, scenario.wind_model.base_direction_degrees, gradual=True)
+
+    assert boat.heading_degrees == 145.0
+    assert round(boat.speed_knots, 2) == 4.32
+    assert boat.maneuver_remaining_degrees == 90.0
+
+    step_boat(boat, scenario, 1.0)
+
+    assert boat.heading_degrees == 203.0
+    assert boat.maneuver_remaining_degrees == 32.0
+
+    step_boat(boat, scenario, 1.0)
+
+    assert boat.heading_degrees == 235.0
+    assert boat.maneuver_remaining_degrees == 0.0
+    assert boat.maneuver_speed_factor == 1.0
 
 
 def test_gybe_turns_opposite_direction_from_other_downwind_board():

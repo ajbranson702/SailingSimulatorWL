@@ -367,9 +367,9 @@ class MainWindow(QMainWindow):
         elif key == Qt.Key.Key_Down:
             steer_away_from_wind(user_boat, wind_from, 5.0)
         elif key == Qt.Key.Key_T:
-            tack(user_boat, wind_from)
+            tack(user_boat, wind_from, gradual=True)
         elif key == Qt.Key.Key_G:
-            gybe(user_boat, wind_from)
+            gybe(user_boat, wind_from, gradual=True)
         else:
             return False
 
