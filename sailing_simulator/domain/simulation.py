@@ -29,6 +29,8 @@ MARK_ROUNDING_GATE_HALF_WIDTH = 140.0
 MARK_ROUNDING_ADVANCE_DISTANCE = 4.0
 MARK_ROUNDING_COMPLETION_MAX_ADVANCE = 260.0
 MARK_APPROACH_CONFIRM_DISTANCE = 4.0
+MARK_ROOM_ZONE_RADIUS = BOAT_LENGTH_UNITS * 3.0
+MARK_ROOM_OVERLAP_DISTANCE = BOAT_LENGTH_UNITS * 1.25
 AI_MARK_ROUNDING_OFFSET = 112.0
 AI_MARK_APPROACH_DISTANCE = 95.0
 AI_MARK_EXIT_DISTANCE = 65.0
@@ -604,6 +606,11 @@ def collision_avoidance_maneuver(boat: Boat, scenario: Scenario) -> str | None:
             continue
         if not boats_have_projected_collision(boat, other, AI_COLLISION_AVOIDANCE_LOOKAHEAD_SECONDS):
             continue
+        mark_room_keep_clear = mark_room_keep_clear_boat(boat, other, scenario)
+        if mark_room_keep_clear is boat:
+            return avoidance_maneuver_for_leg(boat, scenario)
+        if mark_room_keep_clear is other:
+            continue
         if boats_are_in_same_mark_traffic_zone(boat, other, scenario):
             continue
         if boat_should_keep_clear(boat, other, scenario):
@@ -623,6 +630,78 @@ def boat_should_keep_clear(boat: Boat, other: Boat, scenario: Scenario) -> bool:
         )
 
     return windward_boat(boat, other, scenario) is boat
+
+
+def mark_room_keep_clear_boat(first: Boat, second: Boat, scenario: Scenario) -> Boat | None:
+    target = common_mark_room_target(first, second, scenario)
+    if target is None:
+        return None
+    if mark_room_excluded_by_opposite_tacks(first, second, scenario, target):
+        return None
+    if not boats_are_in_mark_room_zone(first, second, target):
+        return None
+
+    if boats_are_overlapped_at_mark(first, second, scenario):
+        inside = inside_boat_at_mark(first, second, scenario, target)
+        return second if inside is first else first
+
+    first_distance = distance(first.position, target.position)
+    second_distance = distance(second.position, target.position)
+    if abs(first_distance - second_distance) <= 1e-9:
+        return None
+    return second if first_distance < second_distance else first
+
+
+def common_mark_room_target(first: Boat, second: Boat, scenario: Scenario) -> Mark | None:
+    if not first.has_started or not second.has_started:
+        return None
+    if first.target_leg_index != second.target_leg_index:
+        return None
+
+    target = target_mark_for(scenario.course, first.target_leg_index)
+    if target is None:
+        return None
+
+    first_side = rounding_boat_side_unit(scenario, first.target_leg_index)
+    second_side = rounding_boat_side_unit(scenario, second.target_leg_index)
+    if first_side is None or second_side is None:
+        return None
+    if dot(first_side, second_side) < 0.99:
+        return None
+    return target
+
+
+def mark_room_excluded_by_opposite_tacks(first: Boat, second: Boat, scenario: Scenario, target: Mark) -> bool:
+    if target.mark_type != MarkType.WINDWARD:
+        return False
+    return tack_side(first, scenario) != tack_side(second, scenario) and boats_are_on_upwind_leg(first, second, scenario)
+
+
+def boats_are_in_mark_room_zone(first: Boat, second: Boat, target: Mark) -> bool:
+    return distance(first.position, target.position) <= MARK_ROOM_ZONE_RADIUS or distance(second.position, target.position) <= MARK_ROOM_ZONE_RADIUS
+
+
+def boats_are_overlapped_at_mark(first: Boat, second: Boat, scenario: Scenario) -> bool:
+    axis = incoming_leg_unit_for(scenario, first.target_leg_index)
+    if axis is None:
+        axis = heading_unit(midpoint_heading(first.heading_degrees, second.heading_degrees))
+
+    separation = Vector2(second.position.x - first.position.x, second.position.y - first.position.y)
+    return abs(dot(separation, axis)) <= MARK_ROOM_OVERLAP_DISTANCE
+
+
+def inside_boat_at_mark(first: Boat, second: Boat, scenario: Scenario, target: Mark) -> Boat:
+    first_distance = distance(first.position, target.position)
+    second_distance = distance(second.position, target.position)
+    if abs(first_distance - second_distance) > 1e-9:
+        return first if first_distance < second_distance else second
+
+    side_unit = rounding_boat_side_unit(scenario, first.target_leg_index)
+    if side_unit is None:
+        return first
+    first_side = dot(Vector2(first.position.x - target.position.x, first.position.y - target.position.y), side_unit)
+    second_side = dot(Vector2(second.position.x - target.position.x, second.position.y - target.position.y), side_unit)
+    return first if first_side >= second_side else second
 
 
 def avoidance_maneuver_for_leg(boat: Boat, scenario: Scenario) -> str:
@@ -1102,6 +1181,8 @@ def detect_boat_collisions(scenario: Scenario) -> None:
         if distance(first.position, second.position) <= BOAT_COLLISION_RADIUS:
             if first.penalty_turn_remaining_degrees > 0.0 or second.penalty_turn_remaining_degrees > 0.0:
                 continue
+            if apply_mark_room_collision_rule(first, second, scenario):
+                continue
             if apply_port_starboard_collision_rule(first, second, scenario):
                 continue
             if apply_same_tack_windward_leeward_collision_rule(first, second, scenario):
@@ -1181,6 +1262,21 @@ def apply_port_starboard_collision_rule(first: Boat, second: Boat, scenario: Sce
     return True
 
 
+def apply_mark_room_collision_rule(first: Boat, second: Boat, scenario: Scenario) -> bool:
+    keep_clear = mark_room_keep_clear_boat(first, second, scenario)
+    if keep_clear is None:
+        return False
+
+    entitled = second if keep_clear is first else first
+    start_penalty_turn(keep_clear, entitled)
+    add_event(
+        scenario,
+        RaceEventType.RULE_PENALTY,
+        f"{keep_clear.name} failed to give {entitled.name} mark-room and is taking a two-turn penalty.",
+    )
+    return True
+
+
 def apply_same_tack_windward_leeward_collision_rule(first: Boat, second: Boat, scenario: Scenario) -> bool:
     if not first.has_started or not second.has_started:
         return False
@@ -1234,6 +1330,15 @@ def leeward_boat(first: Boat, second: Boat, scenario: Scenario) -> Boat:
     first_downwind = dot(first.position, downwind_unit)
     second_downwind = dot(second.position, downwind_unit)
     return first if first_downwind >= second_downwind else second
+
+
+def midpoint_heading(first_heading: float, second_heading: float) -> float:
+    return normalize_degrees(first_heading + signed_angle(second_heading, first_heading) * 0.5)
+
+
+def heading_unit(heading: float) -> Vector2:
+    radians = math.radians(heading)
+    return Vector2(math.sin(radians), -math.cos(radians))
 
 
 def midpoint(first: Vector2, second: Vector2) -> Vector2:

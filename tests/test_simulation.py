@@ -1064,6 +1064,87 @@ def test_same_tack_windward_ai_gybes_before_projected_downwind_collision():
     assert windward_ai.speed_knots == 7.5
 
 
+def test_outside_ai_gybes_to_give_inside_boat_mark_room():
+    scenario = default_scenario()
+    outside_ai = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    inside_boat = scenario.boats[0]
+    outside_ai.has_started = True
+    inside_boat.has_started = True
+    outside_ai.target_leg_index = 1
+    inside_boat.target_leg_index = 1
+    outside_ai.position = Vector2(425.0, 700.0)
+    inside_boat.position = Vector2(455.0, 700.0)
+    outside_ai.heading_degrees = 90.0
+    inside_boat.heading_degrees = 270.0
+    outside_ai.speed_knots = 10.0
+    inside_boat.speed_knots = 10.0
+    scenario.race_state.elapsed_seconds = 20.0
+
+    assert collision_avoidance_maneuver(outside_ai, scenario) == "gybe"
+
+
+def test_inside_boat_holds_mark_room_before_projected_collision():
+    scenario = default_scenario()
+    inside_ai = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    outside_boat = scenario.boats[0]
+    inside_ai.has_started = True
+    outside_boat.has_started = True
+    inside_ai.target_leg_index = 1
+    outside_boat.target_leg_index = 1
+    inside_ai.position = Vector2(455.0, 700.0)
+    outside_boat.position = Vector2(425.0, 700.0)
+    inside_ai.heading_degrees = 270.0
+    outside_boat.heading_degrees = 90.0
+    inside_ai.speed_knots = 10.0
+    outside_boat.speed_knots = 10.0
+    scenario.race_state.elapsed_seconds = 20.0
+
+    assert collision_avoidance_maneuver(inside_ai, scenario) is None
+
+
+def test_outside_boat_hitting_inside_boat_at_mark_takes_mark_room_penalty():
+    scenario = default_scenario()
+    outside_boat, inside_boat = scenario.boats[0], scenario.boats[1]
+    outside_boat.has_started = True
+    inside_boat.has_started = True
+    outside_boat.target_leg_index = 1
+    inside_boat.target_leg_index = 1
+    outside_boat.position = Vector2(435.0, 700.0)
+    inside_boat.position = Vector2(455.0, 700.0)
+    outside_boat.heading_degrees = 90.0
+    inside_boat.heading_degrees = 270.0
+    outside_boat.speed_knots = 5.0
+    inside_boat.speed_knots = 5.0
+
+    detect_race_events(scenario, {})
+
+    assert outside_boat.penalty_turn_remaining_degrees == 720.0
+    assert outside_boat.penalties_taken == 1
+    assert inside_boat.penalty_turn_remaining_degrees == 0.0
+    assert any("mark-room" in event.message for event in scenario.race_state.events)
+    assert not any(event.event_type == RaceEventType.BOAT_COLLISION for event in scenario.race_state.events)
+
+
+def test_rule_18_excludes_opposite_tacks_on_windward_beat():
+    scenario = default_scenario()
+    port_boat, starboard_boat = scenario.boats[0], scenario.boats[1]
+    port_boat.has_started = True
+    starboard_boat.has_started = True
+    port_boat.target_leg_index = 0
+    starboard_boat.target_leg_index = 0
+    port_boat.position = Vector2(435.0, 165.0)
+    starboard_boat.position = Vector2(455.0, 165.0)
+    port_boat.heading_degrees = 45.0
+    starboard_boat.heading_degrees = 315.0
+    port_boat.speed_knots = 5.0
+    starboard_boat.speed_knots = 5.0
+
+    detect_race_events(scenario, {})
+
+    assert port_boat.penalty_turn_remaining_degrees == 720.0
+    assert any("starboard" in event.message for event in scenario.race_state.events)
+
+
 def test_same_tack_windward_boat_hitting_leeward_boat_takes_two_turn_penalty():
     scenario = default_scenario()
     windward_boat, leeward_boat = scenario.boats[0], scenario.boats[1]
