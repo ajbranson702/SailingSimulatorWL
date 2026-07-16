@@ -341,8 +341,8 @@ def ai_finish_target_position_for_boat(boat: Boat, scenario: Scenario) -> Vector
 
     center = start_line_center(scenario)
     side = 1 if ai_tactical_value(boat, "finish-side") >= 0.0 else -1
-    lane_variation = ai_tactical_value(boat, "finish-lane") * 0.2
-    offset = min(105.0, length * max(0.18, min(0.48, 0.34 + lane_variation))) * side
+    lane_variation = ai_tactical_value(boat, "finish-lane") * 0.08
+    offset = length * max(0.18, min(0.34, 0.26 + lane_variation)) * side
     return Vector2(center.x + (dx / length) * offset, center.y + (dy / length) * offset)
 
 
@@ -428,7 +428,7 @@ def finish_crossing_point_for_heading(position: Vector2, heading: float, scenari
         position.x + math.sin(radians) * AI_FINISH_FETCH_DISTANCE,
         position.y - math.cos(radians) * AI_FINISH_FETCH_DISTANCE,
     )
-    crossing = start_finish_line_crossing_parameter(scenario, position, projected)
+    crossing = finish_line_crossing_parameter(scenario, position, projected)
     if crossing is None:
         return None
     return point_at_parameter(position, projected, crossing)
@@ -1042,7 +1042,7 @@ def detect_course_progress(scenario: Scenario, previous_positions: dict[str, Vec
                 )
                 continue
 
-            crossing = start_finish_line_crossing_parameter(scenario, previous, boat.position)
+            crossing = finish_line_crossing_parameter(scenario, previous, boat.position)
             crossing = earliest_valid_parameter([crossing], segment_position)
             if crossing is None:
                 break
@@ -1513,6 +1513,16 @@ def start_finish_line_crossing_parameter(scenario: Scenario, segment_start: Vect
     if distance_from_segment(segment_end, line_start, line_end) <= START_FINISH_LINE_TOUCH_RADIUS:
         return 1.0
     return None
+
+
+def finish_line_crossing_parameter(scenario: Scenario, segment_start: Vector2, segment_end: Vector2) -> float | None:
+    line_start, line_end = actual_start_finish_line(scenario)
+    return segment_intersection_parameter(segment_start, segment_end, line_start, line_end)
+
+
+def actual_start_finish_line(scenario: Scenario) -> tuple[Vector2, Vector2]:
+    start = scenario.course.start_line
+    return start.pin, start.committee_boat
 
 
 def extended_start_finish_line(scenario: Scenario) -> tuple[Vector2, Vector2]:

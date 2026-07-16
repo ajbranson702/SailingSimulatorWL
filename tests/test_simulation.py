@@ -289,6 +289,21 @@ def test_ai_boats_target_different_finish_lanes():
     assert targets[0] != targets[1]
 
 
+def test_ai_finish_lanes_stay_inside_actual_line_ends():
+    scenario = default_scenario()
+    ai_boats = [boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI]
+    line_min_x = min(scenario.course.start_line.pin.x, scenario.course.start_line.committee_boat.x)
+    line_max_x = max(scenario.course.start_line.pin.x, scenario.course.start_line.committee_boat.x)
+
+    for boat in ai_boats:
+        boat.has_started = True
+        boat.target_leg_index = 2
+        target = ai_target_position(boat, scenario)
+
+        assert target.y == scenario.course.start_line.pin.y
+        assert line_min_x + 25.0 < target.x < line_max_x - 25.0
+
+
 def test_ai_fetches_finish_without_normal_board_change_near_line():
     scenario = default_scenario()
     ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
@@ -792,7 +807,7 @@ def test_w_course_finishes_after_all_marks_and_start_line_crossing():
     assert boat.name in scenario.race_state.finished_boats
 
 
-def test_w_course_finish_counts_just_beyond_committee_end():
+def test_w_course_finish_does_not_count_beyond_committee_end():
     scenario = default_scenario()
     boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
     boat.has_started = True
@@ -802,11 +817,11 @@ def test_w_course_finish_counts_just_beyond_committee_end():
 
     detect_race_events(scenario, {boat.name: previous})
 
-    assert boat.is_finished
-    assert boat.name in scenario.race_state.finished_boats
+    assert not boat.is_finished
+    assert boat.name not in scenario.race_state.finished_boats
 
 
-def test_w_course_finish_counts_when_boat_reaches_line_band():
+def test_w_course_finish_does_not_count_when_boat_reaches_line_band_without_crossing():
     scenario = default_scenario()
     boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
     boat.has_started = True
@@ -816,8 +831,8 @@ def test_w_course_finish_counts_when_boat_reaches_line_band():
 
     detect_race_events(scenario, {boat.name: previous})
 
-    assert boat.is_finished
-    assert boat.name in scenario.race_state.finished_boats
+    assert not boat.is_finished
+    assert boat.name not in scenario.race_state.finished_boats
 
 
 def test_progress_can_round_last_mark_then_finish_on_line():
