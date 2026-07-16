@@ -57,6 +57,7 @@ AI_TACTICAL_WAYPOINT_VARIATION = 34.0
 AI_TACTICAL_SCORE_BIAS = 0.32
 AI_BOARD_CHANGE_RATIO = 1.35
 AI_BOARD_CHANGE_RATIO_VARIATION = 0.22
+MARK_TOUCH_PENALTY_TURN_DEGREES = 360.0
 PENALTY_TURN_DEGREES = 720.0
 PENALTY_TURN_RATE_DEGREES_PER_SECOND = 90.0
 USER_TACK_TURN_RATE_DEGREES_PER_SECOND = 38.0
@@ -1039,6 +1040,7 @@ def reset_boats_to_start(scenario: Scenario) -> None:
         boat.penalty_resume_heading = None
         boat.penalty_turn_direction = 1
         boat.penalties_taken = 0
+        boat.mark_touch_penalty_target_leg_index = -1
         boat.maneuver_remaining_degrees = 0.0
         boat.maneuver_turn_direction = 1
         boat.maneuver_turn_rate_degrees_per_second = 0.0
@@ -1113,6 +1115,7 @@ def detect_course_progress(scenario: Scenario, previous_positions: dict[str, Vec
                 boat.mark_approach_target_leg_index = -1
                 boat.ai_rounding_target_leg_index = -1
                 boat.ai_rounding_stage = 0
+                boat.mark_touch_penalty_target_leg_index = -1
                 segment_position = rounding
                 add_event(
                     scenario,
@@ -1166,6 +1169,7 @@ def detect_mark_roundings(scenario: Scenario, previous_positions: dict[str, Vect
             boat.mark_approach_target_leg_index = -1
             boat.ai_rounding_target_leg_index = -1
             boat.ai_rounding_stage = 0
+            boat.mark_touch_penalty_target_leg_index = -1
             add_event(
                 scenario,
                 RaceEventType.MARK_ROUNDED,
@@ -1223,10 +1227,15 @@ def detect_mark_collisions(scenario: Scenario) -> None:
         if target is None:
             continue
         if distance(boat.position, target.position) <= MARK_COLLISION_RADIUS:
+            if boat.mark_touch_penalty_target_leg_index == boat.target_leg_index:
+                continue
+            if not start_mark_touch_penalty(boat):
+                continue
+            boat.mark_touch_penalty_target_leg_index = boat.target_leg_index
             add_event(
                 scenario,
                 RaceEventType.MARK_COLLISION,
-                f"{boat.name} hit mark {target.label}.",
+                f"{boat.name} hit mark {target.label} and is taking a one-turn penalty.",
             )
 
 
@@ -1356,6 +1365,20 @@ def start_penalty_turn(port_boat: Boat, starboard_boat: Boat) -> None:
     port_boat.speed_knots = 0.0
     port_boat.collision_stop_heading = None
     port_boat.collision_released_heading = None
+
+
+def start_mark_touch_penalty(boat: Boat) -> bool:
+    if boat.penalty_turn_remaining_degrees > 0.0:
+        return False
+
+    boat.penalty_resume_heading = boat.heading_degrees
+    boat.penalty_turn_remaining_degrees = MARK_TOUCH_PENALTY_TURN_DEGREES
+    boat.penalty_turn_direction = 1
+    boat.penalties_taken += 1
+    boat.speed_knots = 0.0
+    boat.collision_stop_heading = None
+    boat.collision_released_heading = None
+    return True
 
 
 def step_penalty_turn(boat: Boat, elapsed_seconds: float) -> None:

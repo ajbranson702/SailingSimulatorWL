@@ -1109,8 +1109,8 @@ def test_outside_boat_hitting_inside_boat_at_mark_takes_mark_room_penalty():
     inside_boat.has_started = True
     outside_boat.target_leg_index = 1
     inside_boat.target_leg_index = 1
-    outside_boat.position = Vector2(435.0, 700.0)
-    inside_boat.position = Vector2(455.0, 700.0)
+    outside_boat.position = Vector2(435.0, 695.0)
+    inside_boat.position = Vector2(455.0, 695.0)
     outside_boat.heading_degrees = 90.0
     inside_boat.heading_degrees = 270.0
     outside_boat.speed_knots = 5.0
@@ -1204,10 +1204,34 @@ def test_boat_is_clamped_and_stopped_at_course_boundary():
     assert boat.speed_knots == 0.0
 
 
-def test_mark_collision_creates_event():
+def test_mark_collision_starts_one_turn_penalty():
     scenario = default_scenario()
-    scenario.boats[0].position = scenario.course.marks[0].position
+    boat = scenario.boats[0]
+    boat.heading_degrees = 315.0
+    boat.speed_knots = 5.0
+    boat.position = scenario.course.marks[0].position
 
     detect_race_events(scenario, {})
 
+    assert boat.penalty_turn_remaining_degrees == 360.0
+    assert boat.penalty_resume_heading == 315.0
+    assert boat.penalties_taken == 1
+    assert boat.mark_touch_penalty_target_leg_index == 0
+    assert boat.speed_knots == 0.0
     assert any(event.event_type == RaceEventType.MARK_COLLISION for event in scenario.race_state.events)
+    assert any("one-turn penalty" in event.message for event in scenario.race_state.events)
+
+
+def test_mark_collision_does_not_restart_existing_penalty():
+    scenario = default_scenario()
+    boat = scenario.boats[0]
+    boat.position = scenario.course.marks[0].position
+    boat.penalty_turn_remaining_degrees = 180.0
+    boat.penalties_taken = 1
+
+    detect_race_events(scenario, {})
+
+    assert boat.penalty_turn_remaining_degrees == 180.0
+    assert boat.penalties_taken == 1
+    assert boat.mark_touch_penalty_target_leg_index == -1
+    assert not any(event.event_type == RaceEventType.MARK_COLLISION for event in scenario.race_state.events)
