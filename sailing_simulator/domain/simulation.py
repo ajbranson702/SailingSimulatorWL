@@ -36,6 +36,8 @@ AI_LEEWARD_ROUNDING_OFFSET = 80.0
 AI_LEEWARD_ROUNDING_ADVANCE = 92.0
 AI_CLOSE_TARGET_RADIUS = 85.0
 AI_FINISH_APPROACH_RADIUS = 260.0
+AI_FINISH_FETCH_DISTANCE = 420.0
+AI_FINISH_RECONSIDER_SECONDS = 26.0
 AI_ROUNDING_WAYPOINT_RADIUS = 70.0
 AI_MARK_TRAFFIC_ZONE_RADIUS = AI_MARK_APPROACH_DISTANCE + AI_MARK_ROUNDING_OFFSET + BOAT_LENGTH_UNITS
 AI_BOUNDARY_MARGIN = 75.0
@@ -99,8 +101,7 @@ def update_ai_heading(boat: Boat, scenario: Scenario) -> None:
         boat.ai_collision_escape_heading = None
 
     if boat_is_on_finish_approach(boat, scenario):
-        target_position = ai_finish_target_position_for_boat(boat, scenario)
-        desired_heading = best_vmg_heading(boat, scenario, target_position)
+        desired_heading = ai_finish_approach_heading(boat, scenario)
         boat.heading_degrees = turn_toward_heading(boat.heading_degrees, desired_heading, 18.0)
         release_collision_stop_if_heading_changed(boat)
         return
@@ -333,10 +334,98 @@ def ai_finish_target_position_for_boat(boat: Boat, scenario: Scenario) -> Vector
         return start_line_center(scenario)
 
     center = start_line_center(scenario)
-    side = boat.ai_board or 1
+    side = 1 if ai_tactical_value(boat, "finish-side") >= 0.0 else -1
     lane_variation = ai_tactical_value(boat, "finish-lane") * 0.2
     offset = min(105.0, length * max(0.18, min(0.48, 0.34 + lane_variation))) * side
     return Vector2(center.x + (dx / length) * offset, center.y + (dy / length) * offset)
+
+
+def ai_finish_approach_heading(boat: Boat, scenario: Scenario) -> float:
+    from sailing_simulator.domain.wind import wind_at
+
+    target_position = ai_finish_target_position_for_boat(boat, scenario)
+    wind_direction, wind_speed = wind_at(scenario, boat.position)
+    leg_mode = ai_leg_mode(wind_direction, bearing_to(boat.position, target_position))
+    if leg_mode == "reach":
+        return best_vmg_heading(boat, scenario, target_position)
+
+    if (
+        boat.ai_board is None
+        or boat.ai_board_target_leg_index != boat.target_leg_index
+        or should_reconsider_finish_board(boat, scenario, leg_mode, wind_direction)
+    ):
+        boat.ai_board = best_finish_board(boat, scenario, leg_mode, wind_direction, wind_speed)
+        boat.ai_board_target_leg_index = boat.target_leg_index
+        boat.ai_last_maneuver_seconds = scenario.race_state.elapsed_seconds
+
+    return ai_board_heading(wind_direction, leg_mode, boat.ai_board or 1)
+
+
+def should_reconsider_finish_board(boat: Boat, scenario: Scenario, leg_mode: str, wind_direction: float) -> bool:
+    if boat.ai_board is None:
+        return True
+    if finish_board_fetches_line(boat, scenario, leg_mode, wind_direction, boat.ai_board):
+        return False
+    if scenario.race_state.elapsed_seconds - boat.ai_last_maneuver_seconds < AI_FINISH_RECONSIDER_SECONDS:
+        return False
+    return ai_board_near_boundary(boat, scenario, wind_direction, leg_mode)
+
+
+def best_finish_board(
+    boat: Boat,
+    scenario: Scenario,
+    leg_mode: str,
+    wind_direction: float,
+    wind_speed: float,
+) -> int:
+    first_score = finish_board_score(boat, scenario, leg_mode, wind_direction, wind_speed, 1)
+    second_score = finish_board_score(boat, scenario, leg_mode, wind_direction, wind_speed, -1)
+    return 1 if first_score >= second_score else -1
+
+
+def finish_board_score(
+    boat: Boat,
+    scenario: Scenario,
+    leg_mode: str,
+    wind_direction: float,
+    wind_speed: float,
+    board: int,
+) -> float:
+    heading = ai_board_heading(wind_direction, leg_mode, board)
+    target_position = ai_finish_target_position_for_boat(boat, scenario)
+    target_bearing = bearing_to(boat.position, target_position)
+    twa = true_wind_angle(heading, wind_direction)
+    speed = target_boat_speed(scenario.polar, wind_speed, twa)
+    alignment = math.cos(math.radians(signed_angle(heading, target_bearing)))
+    crossing_point = finish_crossing_point_for_heading(boat.position, heading, scenario)
+    if crossing_point is None:
+        return speed * alignment
+
+    lane_error = distance(crossing_point, target_position)
+    return 100.0 + speed * alignment - lane_error * 0.04
+
+
+def finish_board_fetches_line(
+    boat: Boat,
+    scenario: Scenario,
+    leg_mode: str,
+    wind_direction: float,
+    board: int,
+) -> bool:
+    heading = ai_board_heading(wind_direction, leg_mode, board)
+    return finish_crossing_point_for_heading(boat.position, heading, scenario) is not None
+
+
+def finish_crossing_point_for_heading(position: Vector2, heading: float, scenario: Scenario) -> Vector2 | None:
+    radians = math.radians(heading)
+    projected = Vector2(
+        position.x + math.sin(radians) * AI_FINISH_FETCH_DISTANCE,
+        position.y - math.cos(radians) * AI_FINISH_FETCH_DISTANCE,
+    )
+    crossing = start_finish_line_crossing_parameter(scenario, position, projected)
+    if crossing is None:
+        return None
+    return point_at_parameter(position, projected, crossing)
 
 
 def ai_prestart_target_position_for_boat(boat: Boat, scenario: Scenario) -> Vector2:

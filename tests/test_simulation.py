@@ -178,9 +178,12 @@ def test_ai_targets_start_finish_line_after_w_course_marks_are_complete():
     ai_boat.ai_board = 1
 
     target = ai_target_position(ai_boat, scenario)
+    ai_boat.ai_board = -1
+    opposite_board_target = ai_target_position(ai_boat, scenario)
 
     assert target.y == 700.0
-    assert target.x > 460.0
+    assert target.x != 460.0
+    assert opposite_board_target == target
 
 
 def test_ai_targets_prestart_side_during_countdown():
@@ -255,6 +258,41 @@ def test_ai_fetches_finish_without_normal_board_change_near_line():
 
     assert ai_boat.ai_board == 1
     assert ai_boat.heading_degrees != 45.0
+
+
+def test_ai_holds_finish_fetching_board_near_line():
+    scenario = default_scenario()
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    ai_boat.has_started = True
+    ai_boat.target_leg_index = 2
+    ai_boat.position = Vector2(360.0, 735.0)
+    ai_boat.heading_degrees = 315.0
+    ai_boat.ai_board = -1
+    ai_boat.ai_board_target_leg_index = ai_boat.target_leg_index
+    ai_boat.ai_last_maneuver_seconds = -9999.0
+
+    update_ai_heading(ai_boat, scenario)
+    first_board = ai_boat.ai_board
+    first_heading = ai_boat.heading_degrees
+    update_ai_heading(ai_boat, scenario)
+
+    assert first_board == -1
+    assert ai_boat.ai_board == first_board
+    assert ai_boat.heading_degrees == first_heading
+
+
+def test_ai_finish_lanes_do_not_move_when_board_changes():
+    scenario = default_scenario()
+    ai_boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    ai_boat.has_started = True
+    ai_boat.target_leg_index = 2
+
+    ai_boat.ai_board = 1
+    first_target = ai_target_position(ai_boat, scenario)
+    ai_boat.ai_board = -1
+    second_target = ai_target_position(ai_boat, scenario)
+
+    assert second_target == first_target
 
 
 def test_ai_targets_leeward_mark_before_w2_finish_line():
