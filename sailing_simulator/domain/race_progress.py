@@ -43,6 +43,8 @@ def total_targets_for(course: Course) -> int:
 
 
 def ranking_key(course: Course, boat: Boat) -> tuple[int, float, float, str]:
+    if boat.is_disqualified:
+        return (2, 0.0, 0.0, boat.name)
     if boat.is_finished and boat.finish_time_seconds is not None:
         return (0, boat.finish_time_seconds, 0.0, boat.name)
 

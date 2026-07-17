@@ -51,6 +51,7 @@ class RaceEventType(str, Enum):
     BOAT_COLLISION = "boat_collision"
     MARK_COLLISION = "mark_collision"
     FINISH_CROSSED = "finish_crossed"
+    DISQUALIFIED = "disqualified"
     MARK_ROUNDED = "mark_rounded"
     START_CROSSED = "start_crossed"
     EARLY_START = "early_start"
@@ -90,6 +91,7 @@ class Boat:
     track: list[Vector2] = field(default_factory=list)
     has_started: bool = False
     is_finished: bool = False
+    is_disqualified: bool = False
     finish_time_seconds: float | None = None
     mark_approach_target_leg_index: int = -1
     collision_stop_heading: float | None = None
@@ -172,6 +174,7 @@ class RaceState:
     start_sequence_seconds: float = 300.0
     events: list[RaceEvent] = field(default_factory=list)
     finished_boats: set[str] = field(default_factory=set)
+    disqualified_boats: set[str] = field(default_factory=set)
 
 
 @dataclass

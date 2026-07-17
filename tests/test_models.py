@@ -53,7 +53,9 @@ def test_scenario_serialization_round_trip_preserves_course():
     scenario.wind_model.base_speed_knots = 14.0
     scenario.race_state.time_scale = 25.0
     scenario.race_state.start_sequence_seconds = 180.0
+    scenario.race_state.disqualified_boats.add("USER")
     scenario.boats[0].is_early_start = True
+    scenario.boats[0].is_disqualified = True
     scenario.boats[0].penalty_turn_remaining_degrees = 180.0
     scenario.boats[0].penalty_resume_heading = 45.0
     scenario.boats[0].penalty_turn_direction = -1
@@ -73,7 +75,9 @@ def test_scenario_serialization_round_trip_preserves_course():
     assert restored.wind_model.base_speed_knots == 14.0
     assert restored.race_state.time_scale == 25.0
     assert restored.race_state.start_sequence_seconds == 180.0
+    assert restored.race_state.disqualified_boats == {"USER"}
     assert restored.boats[0].is_early_start
+    assert restored.boats[0].is_disqualified
     assert restored.boats[0].penalty_turn_remaining_degrees == 180.0
     assert restored.boats[0].penalty_resume_heading == 45.0
     assert restored.boats[0].penalty_turn_direction == -1

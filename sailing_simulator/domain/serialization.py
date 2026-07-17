@@ -61,6 +61,7 @@ def scenario_to_dict(scenario: Scenario) -> dict[str, Any]:
             "start_sequence_seconds": scenario.race_state.start_sequence_seconds,
             "events": [race_event_to_dict(event) for event in scenario.race_state.events],
             "finished_boats": sorted(scenario.race_state.finished_boats),
+            "disqualified_boats": sorted(scenario.race_state.disqualified_boats),
         },
     }
 
@@ -85,6 +86,7 @@ def race_state_from_dict(data: dict[str, Any]) -> RaceState:
         start_sequence_seconds=float(data.get("start_sequence_seconds", 300.0)),
         events=[race_event_from_dict(event) for event in data.get("events", [])],
         finished_boats=set(data.get("finished_boats", [])),
+        disqualified_boats=set(data.get("disqualified_boats", [])),
     )
 
 
@@ -156,6 +158,7 @@ def boat_to_dict(boat: Boat) -> dict[str, Any]:
         "track": [vector_to_dict(point) for point in boat.track],
         "has_started": boat.has_started,
         "is_finished": boat.is_finished,
+        "is_disqualified": boat.is_disqualified,
         "finish_time_seconds": boat.finish_time_seconds,
         "mark_approach_target_leg_index": boat.mark_approach_target_leg_index,
         "collision_stop_heading": boat.collision_stop_heading,
@@ -194,6 +197,7 @@ def boat_from_dict(data: dict[str, Any]) -> Boat:
         track=[vector_from_dict(point, Vector2(0.0, 0.0)) for point in data.get("track", [])],
         has_started=bool(data.get("has_started", False)),
         is_finished=bool(data.get("is_finished", False)),
+        is_disqualified=bool(data.get("is_disqualified", False)),
         finish_time_seconds=data.get("finish_time_seconds"),
         mark_approach_target_leg_index=int(data.get("mark_approach_target_leg_index", -1)),
         collision_stop_heading=data.get("collision_stop_heading"),

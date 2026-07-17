@@ -22,7 +22,16 @@ COURSE_UNITS_PER_NAUTICAL_MILE = 1800.0
 MAX_TRACK_POINTS = 300
 BOAT_COLLISION_RADIUS = 28.0
 BOAT_LENGTH_UNITS = 28.0
-MARK_COLLISION_RADIUS = 22.0
+MARK_COLLISION_RADIUS = 8.0
+BOAT_HULL_POINTS = (
+    Vector2(0.0, -22.0),
+    Vector2(8.0, -15.0),
+    Vector2(11.0, 7.0),
+    Vector2(7.0, 20.0),
+    Vector2(-7.0, 20.0),
+    Vector2(-11.0, 7.0),
+    Vector2(-8.0, -15.0),
+)
 START_FINISH_LINE_EXTENSION = 45.0
 START_FINISH_LINE_TOUCH_RADIUS = 18.0
 MARK_ROUNDING_GATE_HALF_WIDTH = 140.0
@@ -88,7 +97,7 @@ def step_scenario(scenario: Scenario, elapsed_seconds: float) -> None:
 def update_ai_heading(boat: Boat, scenario: Scenario) -> None:
     from sailing_simulator.domain.wind import wind_at
 
-    if boat.is_finished:
+    if boat.is_finished or boat.is_disqualified:
         boat.speed_knots = 0.0
         return
 
@@ -842,7 +851,7 @@ def ai_board_near_boundary(boat: Boat, scenario: Scenario, wind_direction: float
 def step_boat(boat: Boat, scenario: Scenario, elapsed_seconds: float) -> None:
     from sailing_simulator.domain.wind import wind_at
 
-    if boat.is_finished:
+    if boat.is_finished or boat.is_disqualified:
         boat.speed_knots = 0.0
         append_track_point(boat)
         return
@@ -1027,6 +1036,7 @@ def reset_boats_to_start(scenario: Scenario) -> None:
         boat.target_leg_index = 0
         boat.has_started = False
         boat.is_finished = False
+        boat.is_disqualified = False
         boat.finish_time_seconds = None
         boat.mark_approach_target_leg_index = -1
         boat.collision_stop_heading = None
@@ -1054,6 +1064,7 @@ def reset_boats_to_start(scenario: Scenario) -> None:
     scenario.race_state.elapsed_seconds = 0.0
     scenario.race_state.events = []
     scenario.race_state.finished_boats = set()
+    scenario.race_state.disqualified_boats = set()
 
 
 def start_race_sequence(scenario: Scenario) -> None:
@@ -1075,7 +1086,7 @@ def detect_race_events(scenario: Scenario, previous_positions: dict[str, Vector2
 def detect_course_progress(scenario: Scenario, previous_positions: dict[str, Vector2]) -> None:
     start = scenario.course.start_line
     for boat in scenario.boats:
-        if boat.is_finished:
+        if boat.is_finished or boat.is_disqualified:
             continue
 
         previous = previous_positions.get(boat.name)
@@ -1135,6 +1146,10 @@ def detect_course_progress(scenario: Scenario, previous_positions: dict[str, Vec
             if crossing is None:
                 break
 
+            if boat_has_penalty_flag(boat):
+                disqualify_boat_for_unserved_penalty(scenario, boat)
+                break
+
             boat.is_finished = True
             boat.finish_time_seconds = scenario.race_state.elapsed_seconds
             scenario.race_state.finished_boats.add(boat.name)
@@ -1150,9 +1165,23 @@ def detect_start_or_finish_crossings(scenario: Scenario, previous_positions: dic
     detect_course_progress(scenario, previous_positions)
 
 
+def disqualify_boat_for_unserved_penalty(scenario: Scenario, boat: Boat) -> None:
+    boat.is_disqualified = True
+    boat.is_finished = False
+    boat.finish_time_seconds = None
+    boat.speed_knots = 0.0
+    scenario.race_state.finished_boats.discard(boat.name)
+    scenario.race_state.disqualified_boats.add(boat.name)
+    add_event(
+        scenario,
+        RaceEventType.DISQUALIFIED,
+        f"{boat.name} finished without clearing penalties and was disqualified.",
+    )
+
+
 def detect_mark_roundings(scenario: Scenario, previous_positions: dict[str, Vector2]) -> None:
     for boat in scenario.boats:
-        if not boat.has_started or boat.is_finished:
+        if not boat.has_started or boat.is_finished or boat.is_disqualified:
             continue
 
         target = target_mark_for(scenario.course, boat.target_leg_index)
@@ -1186,7 +1215,7 @@ def detect_mark_roundings(scenario: Scenario, previous_positions: dict[str, Vect
 def detect_boat_collisions(scenario: Scenario) -> None:
     colliding_boats: set[str] = set()
     for first, second in itertools.combinations(scenario.boats, 2):
-        if first.is_finished or second.is_finished:
+        if first.is_finished or second.is_finished or first.is_disqualified or second.is_disqualified:
             continue
         if distance(first.position, second.position) <= BOAT_COLLISION_RADIUS:
             if boat_has_penalty_flag(first) or boat_has_penalty_flag(second):
@@ -1231,12 +1260,48 @@ def boat_has_penalty_flag(boat: Boat) -> bool:
     return boat.penalty_turns_owed > 0 or boat.penalty_turn_remaining_degrees > 0.0
 
 
+def boat_touches_mark(boat: Boat, mark: Mark) -> bool:
+    mark_local = to_boat_local(boat, mark.position)
+    if point_in_polygon(mark_local, BOAT_HULL_POINTS):
+        return True
+
+    return any(
+        distance_from_segment(mark_local, start, end) <= MARK_COLLISION_RADIUS
+        for start, end in zip(BOAT_HULL_POINTS, BOAT_HULL_POINTS[1:] + BOAT_HULL_POINTS[:1])
+    )
+
+
+def to_boat_local(boat: Boat, point: Vector2) -> Vector2:
+    radians = math.radians(boat.heading_degrees)
+    dx = point.x - boat.position.x
+    dy = point.y - boat.position.y
+    return Vector2(
+        dx * math.cos(radians) + dy * math.sin(radians),
+        -dx * math.sin(radians) + dy * math.cos(radians),
+    )
+
+
+def point_in_polygon(point: Vector2, polygon: tuple[Vector2, ...]) -> bool:
+    inside = False
+    previous = polygon[-1]
+    for current in polygon:
+        intersects = (current.y > point.y) != (previous.y > point.y)
+        if intersects:
+            crossing_x = (previous.x - current.x) * (point.y - current.y) / (previous.y - current.y) + current.x
+            if point.x < crossing_x:
+                inside = not inside
+        previous = current
+    return inside
+
+
 def detect_mark_collisions(scenario: Scenario) -> None:
     for boat in scenario.boats:
+        if boat.is_finished or boat.is_disqualified:
+            continue
         target = target_mark_for(scenario.course, boat.target_leg_index)
         if target is None:
             continue
-        if distance(boat.position, target.position) <= MARK_COLLISION_RADIUS:
+        if boat_touches_mark(boat, target):
             if boat.mark_touch_penalty_target_leg_index == boat.target_leg_index:
                 continue
             if not start_mark_touch_penalty(boat):

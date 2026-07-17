@@ -272,3 +272,18 @@ def test_progress_table_shows_penalties_taken():
 
     window.close()
     app.quit()
+
+
+def test_progress_table_shows_disqualified_boat():
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    window.scenario.boats[0].is_disqualified = True
+
+    window._refresh_boat_status()
+
+    finish_column = window.progress_table.columnCount() - 2
+    assert window.progress_table.item(0, finish_column).text() == "DSQ"
+    assert "Disqualified" in window._boat_progress_text(window.scenario.boats[0])
+
+    window.close()
+    app.quit()

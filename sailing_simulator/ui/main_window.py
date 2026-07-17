@@ -703,6 +703,8 @@ class MainWindow(QMainWindow):
                 self.progress_table.setItem(row, column, item)
 
             finish_item = QTableWidgetItem("✓" if boat.is_finished else "")
+            if boat.is_disqualified:
+                finish_item.setText("DSQ")
             finish_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.progress_table.setItem(row, finish_column, finish_item)
 
@@ -735,6 +737,8 @@ class MainWindow(QMainWindow):
         )
 
     def _boat_progress_text(self, boat: Boat) -> str:
+        if boat.is_disqualified:
+            return "Disqualified"
         if boat.is_early_start and not boat.has_started:
             return "Target: restart after early start"
         if boat.is_finished and boat.finish_time_seconds is not None:
@@ -760,6 +764,9 @@ class MainWindow(QMainWindow):
     def _event_status_text(self) -> str:
         if self.scenario.race_state.events:
             return "\n".join(event.message for event in self.scenario.race_state.events[-3:])
+        if self.scenario.race_state.disqualified_boats:
+            disqualified = ", ".join(sorted(self.scenario.race_state.disqualified_boats))
+            return f"Disqualified: {disqualified}"
         if self.scenario.race_state.finished_boats:
             finished = ", ".join(sorted(self.scenario.race_state.finished_boats))
             return f"Finished: {finished}"

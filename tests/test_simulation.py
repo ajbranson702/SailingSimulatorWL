@@ -22,6 +22,7 @@ from sailing_simulator.domain.simulation import (
     bearing_to,
     best_vmg_heading,
     boat_is_on_finish_approach,
+    boat_touches_mark,
     collision_avoidance_maneuver,
     detect_race_events,
     gybe,
@@ -460,7 +461,7 @@ def test_ai_fleet_completes_t3_course():
     assert all(boat.is_finished for boat in ai_boats)
 
 
-def test_default_ai_fleet_rounds_and_finishes_without_hitting_marks():
+def test_default_ai_fleet_reaches_terminal_result_without_hitting_marks():
     scenario = default_scenario()
 
     for _ in range(1800):
@@ -468,7 +469,8 @@ def test_default_ai_fleet_rounds_and_finishes_without_hitting_marks():
 
     ai_boats = [boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI]
     assert all(boat.target_leg_index == 2 for boat in ai_boats)
-    assert all(boat.is_finished for boat in ai_boats)
+    assert all(boat.is_finished or boat.is_disqualified for boat in ai_boats)
+    assert not any(event.event_type == RaceEventType.MARK_COLLISION for event in scenario.race_state.events)
 
 
 def test_ai_fleet_completes_w2_with_mid_course_finish_line():
@@ -690,6 +692,40 @@ def test_finish_crossing_only_counts_after_required_marks():
     assert boat.is_finished
     assert boat.name in scenario.race_state.finished_boats
     assert any(event.event_type == RaceEventType.FINISH_CROSSED for event in scenario.race_state.events)
+
+
+def test_boat_finishing_with_owed_penalty_is_disqualified():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    boat.target_leg_index = 2
+    boat.penalty_turns_owed = 1
+    previous = Vector2(450.0, 690.0)
+    boat.position = Vector2(450.0, 710.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.is_disqualified
+    assert not boat.is_finished
+    assert boat.name in scenario.race_state.disqualified_boats
+    assert boat.name not in scenario.race_state.finished_boats
+    assert any(event.event_type == RaceEventType.DISQUALIFIED for event in scenario.race_state.events)
+
+
+def test_boat_finishing_during_penalty_turn_is_disqualified():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.USER)
+    boat.has_started = True
+    boat.target_leg_index = 2
+    boat.penalty_turn_remaining_degrees = 180.0
+    previous = Vector2(450.0, 690.0)
+    boat.position = Vector2(450.0, 710.0)
+
+    detect_race_events(scenario, {boat.name: previous})
+
+    assert boat.is_disqualified
+    assert not boat.is_finished
+    assert boat.name in scenario.race_state.disqualified_boats
 
 
 def test_w2_does_not_finish_when_passing_line_before_leeward_mark():
@@ -1260,6 +1296,22 @@ def test_mark_collision_starts_one_turn_penalty():
     assert boat.speed_knots == 5.0
     assert any(event.event_type == RaceEventType.MARK_COLLISION for event in scenario.race_state.events)
     assert any("one-turn penalty" in event.message for event in scenario.race_state.events)
+
+
+def test_near_mark_without_hull_contact_does_not_start_penalty():
+    scenario = default_scenario()
+    boat = scenario.boats[0]
+    mark = scenario.course.marks[0]
+    boat.position = Vector2(100.0, 100.0)
+    boat.heading_degrees = 0.0
+    mark.position = Vector2(79.0, 100.0)
+
+    assert not boat_touches_mark(boat, mark)
+
+    detect_race_events(scenario, {})
+
+    assert boat.penalty_turns_owed == 0
+    assert not any(event.event_type == RaceEventType.MARK_COLLISION for event in scenario.race_state.events)
 
 
 def test_mark_collision_does_not_restart_existing_penalty():
