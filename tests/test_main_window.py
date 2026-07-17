@@ -241,6 +241,24 @@ def test_g_key_gybes_user_boat():
     app.quit()
 
 
+def test_p_key_starts_one_user_penalty_turn():
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    user_boat = next(boat for boat in window.scenario.boats if boat.control_mode == BoatControlMode.USER)
+    user_boat.heading_degrees = 315.0
+    user_boat.penalty_turns_owed = 2
+
+    handled = window._handle_key(Qt.Key.Key_P)
+
+    assert handled
+    assert user_boat.penalty_turns_owed == 1
+    assert user_boat.penalty_turn_remaining_degrees == 360.0
+    assert user_boat.penalty_resume_heading == 315.0
+
+    window.close()
+    app.quit()
+
+
 def test_progress_table_shows_penalties_taken():
     app = QApplication.instance() or QApplication([])
     window = MainWindow()

@@ -172,6 +172,8 @@ def boat_to_dict(boat: Boat) -> dict[str, Any]:
         "penalty_turn_remaining_degrees": boat.penalty_turn_remaining_degrees,
         "penalty_resume_heading": boat.penalty_resume_heading,
         "penalty_turn_direction": boat.penalty_turn_direction,
+        "penalty_turns_owed": boat.penalty_turns_owed,
+        "penalty_clear_position": vector_to_dict(boat.penalty_clear_position) if boat.penalty_clear_position else None,
         "penalties_taken": boat.penalties_taken,
         "mark_touch_penalty_target_leg_index": boat.mark_touch_penalty_target_leg_index,
         "maneuver_remaining_degrees": boat.maneuver_remaining_degrees,
@@ -208,6 +210,10 @@ def boat_from_dict(data: dict[str, Any]) -> Boat:
         penalty_turn_remaining_degrees=float(data.get("penalty_turn_remaining_degrees", 0.0)),
         penalty_resume_heading=data.get("penalty_resume_heading"),
         penalty_turn_direction=int(data.get("penalty_turn_direction", 1)),
+        penalty_turns_owed=int(data.get("penalty_turns_owed", 0)),
+        penalty_clear_position=vector_from_dict(data["penalty_clear_position"], Vector2(0.0, 0.0))
+        if data.get("penalty_clear_position")
+        else None,
         penalties_taken=int(data.get("penalties_taken", 0)),
         mark_touch_penalty_target_leg_index=int(data.get("mark_touch_penalty_target_leg_index", -1)),
         maneuver_remaining_degrees=float(data.get("maneuver_remaining_degrees", 0.0)),

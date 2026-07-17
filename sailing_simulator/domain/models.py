@@ -106,6 +106,8 @@ class Boat:
     penalty_turn_remaining_degrees: float = 0.0
     penalty_resume_heading: float | None = None
     penalty_turn_direction: int = 1
+    penalty_turns_owed: int = 0
+    penalty_clear_position: Vector2 | None = None
     penalties_taken: int = 0
     mark_touch_penalty_target_leg_index: int = -1
     maneuver_remaining_degrees: float = 0.0

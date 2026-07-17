@@ -27,6 +27,7 @@ from sailing_simulator.domain.simulation import (
     gybe,
     reset_boats_to_start,
     start_race_sequence,
+    start_penalty_turn_if_owed,
     step_boat,
     step_scenario,
     steer_away_from_wind,
@@ -905,10 +906,10 @@ def test_port_boat_hitting_starboard_on_upwind_leg_takes_two_turn_penalty():
 
     detect_race_events(scenario, {})
 
-    assert port_boat.penalty_turn_remaining_degrees == 720.0
-    assert port_boat.penalty_resume_heading == 45.0
+    assert port_boat.penalty_turns_owed == 2
+    assert port_boat.penalty_turn_remaining_degrees == 0.0
     assert port_boat.penalties_taken == 1
-    assert port_boat.speed_knots == 0.0
+    assert port_boat.speed_knots == 5.0
     assert starboard_boat.speed_knots == 5.0
     assert starboard_boat.collision_stop_heading is None
     assert any(event.event_type == RaceEventType.RULE_PENALTY for event in scenario.race_state.events)
@@ -920,13 +921,13 @@ def test_penalty_turn_resumes_original_heading_after_two_360s():
     boat = scenario.boats[0]
     boat.heading_degrees = 45.0
     boat.penalty_resume_heading = 45.0
-    boat.penalty_turn_remaining_degrees = 720.0
+    boat.penalty_turn_remaining_degrees = 360.0
     boat.penalty_turn_direction = 1
 
     step_boat(boat, scenario, 2.0)
 
-    assert boat.heading_degrees == 225.0
-    assert boat.penalty_turn_remaining_degrees == 540.0
+    assert boat.heading_degrees == 135.0
+    assert boat.penalty_turn_remaining_degrees == 270.0
 
     step_boat(boat, scenario, 6.0)
 
@@ -940,13 +941,48 @@ def test_ai_boat_taking_penalty_turn_does_not_steer_tactically_first():
     boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
     boat.heading_degrees = 45.0
     boat.penalty_resume_heading = 45.0
-    boat.penalty_turn_remaining_degrees = 720.0
+    boat.penalty_turn_remaining_degrees = 360.0
     boat.penalty_turn_direction = 1
 
     step_scenario(scenario, 1.0)
 
-    assert boat.heading_degrees == 135.0
-    assert boat.penalty_turn_remaining_degrees == 630.0
+    assert boat.heading_degrees == 90.0
+    assert boat.penalty_turn_remaining_degrees == 315.0
+
+
+def test_user_can_start_one_owed_penalty_turn():
+    scenario = default_scenario()
+    boat = scenario.boats[0]
+    boat.heading_degrees = 315.0
+    boat.penalty_turns_owed = 2
+
+    assert start_penalty_turn_if_owed(boat)
+
+    assert boat.penalty_turns_owed == 1
+    assert boat.penalty_turn_remaining_degrees == 360.0
+    assert boat.penalty_resume_heading == 315.0
+
+
+def test_ai_waits_until_clear_before_starting_owed_penalty_turn():
+    scenario = default_scenario()
+    boat = next(boat for boat in scenario.boats if boat.control_mode == BoatControlMode.AI)
+    boat.position = Vector2(100.0, 100.0)
+    boat.penalty_clear_position = boat.position
+    boat.penalty_turns_owed = 1
+    boat.heading_degrees = 315.0
+    boat.has_started = True
+
+    update_ai_heading(boat, scenario)
+
+    assert boat.penalty_turns_owed == 1
+    assert boat.penalty_turn_remaining_degrees == 0.0
+
+    boat.position = Vector2(100.0, 190.0)
+
+    update_ai_heading(boat, scenario)
+
+    assert boat.penalty_turns_owed == 0
+    assert boat.penalty_turn_remaining_degrees == 360.0
 
 
 def test_ai_boat_tacks_before_projected_upwind_collision():
@@ -1118,7 +1154,8 @@ def test_outside_boat_hitting_inside_boat_at_mark_takes_mark_room_penalty():
 
     detect_race_events(scenario, {})
 
-    assert outside_boat.penalty_turn_remaining_degrees == 720.0
+    assert outside_boat.penalty_turns_owed == 2
+    assert outside_boat.penalty_turn_remaining_degrees == 0.0
     assert outside_boat.penalties_taken == 1
     assert inside_boat.penalty_turn_remaining_degrees == 0.0
     assert any("mark-room" in event.message for event in scenario.race_state.events)
@@ -1141,7 +1178,8 @@ def test_rule_18_excludes_opposite_tacks_on_windward_beat():
 
     detect_race_events(scenario, {})
 
-    assert port_boat.penalty_turn_remaining_degrees == 720.0
+    assert port_boat.penalty_turns_owed == 2
+    assert port_boat.penalty_turn_remaining_degrees == 0.0
     assert any("starboard" in event.message for event in scenario.race_state.events)
 
 
@@ -1159,9 +1197,10 @@ def test_same_tack_windward_boat_hitting_leeward_boat_takes_two_turn_penalty():
 
     detect_race_events(scenario, {})
 
-    assert windward_boat.penalty_turn_remaining_degrees == 720.0
+    assert windward_boat.penalty_turns_owed == 2
+    assert windward_boat.penalty_turn_remaining_degrees == 0.0
     assert windward_boat.penalties_taken == 1
-    assert windward_boat.speed_knots == 0.0
+    assert windward_boat.speed_knots == 5.0
     assert leeward_boat.speed_knots == 5.0
     assert any(event.event_type == RaceEventType.RULE_PENALTY for event in scenario.race_state.events)
     assert not any(event.event_type == RaceEventType.BOAT_COLLISION for event in scenario.race_state.events)
@@ -1213,11 +1252,12 @@ def test_mark_collision_starts_one_turn_penalty():
 
     detect_race_events(scenario, {})
 
-    assert boat.penalty_turn_remaining_degrees == 360.0
-    assert boat.penalty_resume_heading == 315.0
+    assert boat.penalty_turns_owed == 1
+    assert boat.penalty_turn_remaining_degrees == 0.0
+    assert boat.penalty_resume_heading is None
     assert boat.penalties_taken == 1
     assert boat.mark_touch_penalty_target_leg_index == 0
-    assert boat.speed_knots == 0.0
+    assert boat.speed_knots == 5.0
     assert any(event.event_type == RaceEventType.MARK_COLLISION for event in scenario.race_state.events)
     assert any("one-turn penalty" in event.message for event in scenario.race_state.events)
 

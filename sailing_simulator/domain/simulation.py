@@ -57,9 +57,9 @@ AI_TACTICAL_WAYPOINT_VARIATION = 34.0
 AI_TACTICAL_SCORE_BIAS = 0.32
 AI_BOARD_CHANGE_RATIO = 1.35
 AI_BOARD_CHANGE_RATIO_VARIATION = 0.22
-MARK_TOUCH_PENALTY_TURN_DEGREES = 360.0
-PENALTY_TURN_DEGREES = 720.0
-PENALTY_TURN_RATE_DEGREES_PER_SECOND = 90.0
+PENALTY_TURN_DEGREES_PER_TURN = 360.0
+PENALTY_TURN_RATE_DEGREES_PER_SECOND = 45.0
+AI_PENALTY_CLEAR_DISTANCE = BOAT_LENGTH_UNITS * 3.0
 USER_TACK_TURN_RATE_DEGREES_PER_SECOND = 38.0
 USER_GYBE_TURN_RATE_DEGREES_PER_SECOND = 58.0
 USER_TACK_INITIAL_SPEED_FACTOR = 0.55
@@ -93,6 +93,10 @@ def update_ai_heading(boat: Boat, scenario: Scenario) -> None:
         return
 
     if boat.penalty_turn_remaining_degrees > 0.0:
+        return
+
+    if boat.penalty_turns_owed > 0 and ai_boat_is_clear_for_penalty(boat):
+        start_penalty_turn_if_owed(boat)
         return
 
     if not boat.has_started and scenario.race_state.elapsed_seconds < 0.0:
@@ -1039,6 +1043,8 @@ def reset_boats_to_start(scenario: Scenario) -> None:
         boat.penalty_turn_remaining_degrees = 0.0
         boat.penalty_resume_heading = None
         boat.penalty_turn_direction = 1
+        boat.penalty_turns_owed = 0
+        boat.penalty_clear_position = None
         boat.penalties_taken = 0
         boat.mark_touch_penalty_target_leg_index = -1
         boat.maneuver_remaining_degrees = 0.0
@@ -1183,7 +1189,7 @@ def detect_boat_collisions(scenario: Scenario) -> None:
         if first.is_finished or second.is_finished:
             continue
         if distance(first.position, second.position) <= BOAT_COLLISION_RADIUS:
-            if first.penalty_turn_remaining_degrees > 0.0 or second.penalty_turn_remaining_degrees > 0.0:
+            if boat_has_penalty_flag(first) or boat_has_penalty_flag(second):
                 continue
             if apply_mark_room_collision_rule(first, second, scenario):
                 continue
@@ -1221,6 +1227,10 @@ def boats_are_actively_escaping(first: Boat, second: Boat, scenario: Scenario) -
     )
 
 
+def boat_has_penalty_flag(boat: Boat) -> bool:
+    return boat.penalty_turns_owed > 0 or boat.penalty_turn_remaining_degrees > 0.0
+
+
 def detect_mark_collisions(scenario: Scenario) -> None:
     for boat in scenario.boats:
         target = target_mark_for(scenario.course, boat.target_leg_index)
@@ -1232,6 +1242,9 @@ def detect_mark_collisions(scenario: Scenario) -> None:
             if not start_mark_touch_penalty(boat):
                 continue
             boat.mark_touch_penalty_target_leg_index = boat.target_leg_index
+            boat.mark_approach_target_leg_index = -1
+            boat.ai_rounding_target_leg_index = -1
+            boat.ai_rounding_stage = 0
             add_event(
                 scenario,
                 RaceEventType.MARK_COLLISION,
@@ -1355,30 +1368,47 @@ def midpoint(first: Vector2, second: Vector2) -> Vector2:
 
 
 def start_penalty_turn(port_boat: Boat, starboard_boat: Boat) -> None:
-    if port_boat.penalty_turn_remaining_degrees > 0.0:
-        return
-
-    port_boat.penalty_resume_heading = port_boat.heading_degrees
-    port_boat.penalty_turn_remaining_degrees = PENALTY_TURN_DEGREES
-    port_boat.penalty_turn_direction = -1 if signed_angle(starboard_boat.heading_degrees, port_boat.heading_degrees) < 0.0 else 1
-    port_boat.penalties_taken += 1
-    port_boat.speed_knots = 0.0
-    port_boat.collision_stop_heading = None
-    port_boat.collision_released_heading = None
+    turn_direction = -1 if signed_angle(starboard_boat.heading_degrees, port_boat.heading_degrees) < 0.0 else 1
+    queue_penalty_turns(port_boat, 2, port_boat.position, turn_direction)
 
 
 def start_mark_touch_penalty(boat: Boat) -> bool:
-    if boat.penalty_turn_remaining_degrees > 0.0:
+    if boat.penalty_turn_remaining_degrees > 0.0 or boat.penalty_turns_owed > 0:
         return False
 
-    boat.penalty_resume_heading = boat.heading_degrees
-    boat.penalty_turn_remaining_degrees = MARK_TOUCH_PENALTY_TURN_DEGREES
-    boat.penalty_turn_direction = 1
+    queue_penalty_turns(boat, 1, boat.position, 1)
+    return True
+
+
+def queue_penalty_turns(boat: Boat, turns: int, clear_position: Vector2, turn_direction: int) -> None:
+    if turns <= 0:
+        return
+
+    boat.penalty_turns_owed += turns
+    boat.penalty_clear_position = clear_position
+    boat.penalty_turn_direction = turn_direction
     boat.penalties_taken += 1
+    boat.collision_stop_heading = None
+    boat.collision_released_heading = None
+
+
+def start_penalty_turn_if_owed(boat: Boat) -> bool:
+    if boat.penalty_turns_owed <= 0 or boat.penalty_turn_remaining_degrees > 0.0:
+        return False
+
+    boat.penalty_turns_owed -= 1
+    boat.penalty_resume_heading = boat.heading_degrees
+    boat.penalty_turn_remaining_degrees = PENALTY_TURN_DEGREES_PER_TURN
     boat.speed_knots = 0.0
     boat.collision_stop_heading = None
     boat.collision_released_heading = None
     return True
+
+
+def ai_boat_is_clear_for_penalty(boat: Boat) -> bool:
+    if boat.penalty_clear_position is None:
+        return True
+    return distance(boat.position, boat.penalty_clear_position) >= AI_PENALTY_CLEAR_DISTANCE
 
 
 def step_penalty_turn(boat: Boat, elapsed_seconds: float) -> None:
@@ -1391,6 +1421,8 @@ def step_penalty_turn(boat: Boat, elapsed_seconds: float) -> None:
         if boat.penalty_resume_heading is not None:
             boat.heading_degrees = normalize_degrees(boat.penalty_resume_heading)
         boat.penalty_resume_heading = None
+        if boat.penalty_turns_owed <= 0:
+            boat.penalty_clear_position = None
 
 
 def set_collision_escape(boat: Boat, other: Boat, scenario: Scenario) -> None:

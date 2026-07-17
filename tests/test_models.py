@@ -57,6 +57,8 @@ def test_scenario_serialization_round_trip_preserves_course():
     scenario.boats[0].penalty_turn_remaining_degrees = 180.0
     scenario.boats[0].penalty_resume_heading = 45.0
     scenario.boats[0].penalty_turn_direction = -1
+    scenario.boats[0].penalty_turns_owed = 2
+    scenario.boats[0].penalty_clear_position = Vector2(123.0, 456.0)
     scenario.boats[0].penalties_taken = 2
     scenario.boats[0].mark_touch_penalty_target_leg_index = 1
     scenario.boats[0].maneuver_remaining_degrees = 45.0
@@ -75,6 +77,8 @@ def test_scenario_serialization_round_trip_preserves_course():
     assert restored.boats[0].penalty_turn_remaining_degrees == 180.0
     assert restored.boats[0].penalty_resume_heading == 45.0
     assert restored.boats[0].penalty_turn_direction == -1
+    assert restored.boats[0].penalty_turns_owed == 2
+    assert restored.boats[0].penalty_clear_position == Vector2(123.0, 456.0)
     assert restored.boats[0].penalties_taken == 2
     assert restored.boats[0].mark_touch_penalty_target_leg_index == 1
     assert restored.boats[0].maneuver_remaining_degrees == 45.0

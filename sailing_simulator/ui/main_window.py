@@ -46,6 +46,7 @@ from sailing_simulator.domain.simulation import (
     gybe,
     reset_boats_to_start,
     start_race_sequence,
+    start_penalty_turn_if_owed,
     steer_away_from_wind,
     steer_toward_wind,
     step_scenario,
@@ -370,6 +371,8 @@ class MainWindow(QMainWindow):
             tack(user_boat, wind_from, gradual=True)
         elif key == Qt.Key.Key_G:
             gybe(user_boat, wind_from, gradual=True)
+        elif key == Qt.Key.Key_P:
+            start_penalty_turn_if_owed(user_boat)
         else:
             return False
 

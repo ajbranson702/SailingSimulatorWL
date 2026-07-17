@@ -238,6 +238,8 @@ class CourseCanvas(QWidget):
             painter.translate(center)
             painter.rotate(boat.heading_degrees)
             self._draw_dinghy(painter, color, self._sail_side_for_boat(boat))
+            if boat.penalty_turns_owed > 0 or boat.penalty_turn_remaining_degrees > 0.0:
+                self._draw_penalty_flag(painter)
             painter.restore()
 
             painter.setPen(QPen(QColor("#1f2933"), 1))
@@ -279,6 +281,12 @@ class CourseCanvas(QWidget):
         painter.setPen(QPen(color.darker(140), 1))
         painter.setBrush(QColor(color.red(), color.green(), color.blue(), 75))
         painter.drawPolygon(sail)
+
+    def _draw_penalty_flag(self, painter: QPainter) -> None:
+        painter.setPen(QPen(QColor("#7f1d1d"), 1.2))
+        painter.drawLine(QPointF(7, 20), QPointF(7, 4))
+        painter.setBrush(QColor("#dc2626"))
+        painter.drawPolygon(QPolygonF([QPointF(7, 4), QPointF(20, 7), QPointF(7, 11)]))
 
     def _sail_side_for(self, heading_degrees: float) -> int:
         wind_from = self.scenario.wind_model.base_direction_degrees
